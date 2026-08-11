@@ -1,0 +1,9 @@
+{
+  "name": "@edubite/api",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.2"
+  }
+}
