@@ -2,7 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { theme } from '../theme';
 
-export const AppHeader = ({ onOpenDrawer }: { onOpenDrawer?: () => void }) => {
+export const AppHeader = ({
+  onOpenDrawer,
+  onOpenNotifications,
+  streak = 0,
+  unreadCount = 0,
+  showLogin = false,
+}: {
+  onOpenDrawer?: () => void;
+  onOpenNotifications?: () => void;
+  streak?: number;
+  unreadCount?: number;
+  /** Mobile learner app keeps this off — silent anonymous session. */
+  showLogin?: boolean;
+}) => {
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' && (
@@ -11,7 +24,7 @@ export const AppHeader = ({ onOpenDrawer }: { onOpenDrawer?: () => void }) => {
           <Text style={styles.icons}>●●●● 5G 🔋</Text>
         </View>
       )}
-      
+
       <View style={styles.appbar}>
         <View style={styles.left}>
           <TouchableOpacity style={styles.hbtn} onPress={onOpenDrawer}>
@@ -21,14 +34,32 @@ export const AppHeader = ({ onOpenDrawer }: { onOpenDrawer?: () => void }) => {
             Edu<Text style={styles.wordmarkHighlight}>bite</Text>
           </Text>
         </View>
-        
+
         <View style={styles.right}>
           <View style={styles.streakChip}>
-            <Text style={styles.streakText}>🔥 0 day streak</Text>
+            <Text style={styles.streakText}>
+              🔥 {streak} day streak
+            </Text>
           </View>
-          <TouchableOpacity style={styles.loginBtn}>
-            <Text style={styles.loginBtnText}>👤 Login</Text>
+          <TouchableOpacity style={styles.hbtn} onPress={onOpenNotifications}>
+            <Text style={styles.hbtnText}>🔔</Text>
+            {unreadCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 9 ? '9+' : String(unreadCount)}
+                </Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
+          {showLogin ? (
+            <TouchableOpacity style={styles.loginBtn}>
+              <Text style={styles.loginBtnText}>👤 Login</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.learnerChip}>
+              <Text style={styles.learnerChipText}>Learner</Text>
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -81,10 +112,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   hbtnText: {
     color: theme.colors.text,
     fontSize: 15,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.pink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    fontFamily: theme.fonts.body,
   },
   wordmark: {
     fontFamily: theme.fonts.heading,
@@ -128,6 +178,20 @@ const styles = StyleSheet.create({
   },
   loginBtnText: {
     color: theme.colors.text,
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: theme.fonts.body,
+  },
+  learnerChip: {
+    backgroundColor: theme.colors.tealSoft,
+    borderColor: 'rgba(29,158,117,0.35)',
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  learnerChipText: {
+    color: theme.colors.teal,
     fontSize: 11,
     fontWeight: '700',
     fontFamily: theme.fonts.body,

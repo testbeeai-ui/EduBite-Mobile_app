@@ -1,46 +1,22 @@
 # Edubite Monorepo Architecture
 
-Welcome to the **Edubite** repository. The project is organized into dedicated **Frontend** and **Backend** directories.
+## Quick start
 
----
-
-## 📁 Repository Directory Structure
-
-```
-edubite-monorepo/
-│
-├── 🎨 FRONTEND (`/frontend` & `/apps`)
-│   ├── mobile/              <-- Expo / React Native Mobile Application
-│   │   ├── app/(tabs)/      # Screen components (Home, DailyDose, FunBrain, Habits, Profile)
-│   │   ├── lib/supabase.ts  # Supabase frontend read client
-│   │   └── hooks/           # useEdubiteData custom hook
-│   └── ui/                  <-- Shared Design System & Component Library (@edubite/ui)
-│
-├── ⚙️ BACKEND (`/backend`)
-│   ├── supabase/            <-- Supabase Cloud Database Specifications
-│   │   ├── schema.sql       # Table DDLs (edubite_*, profiles, user_roles)
-│   │   └── rls_policies.sql # Security RLS Policies
-│   └── api/                 <-- Shared Backend Client & Type Definitions (@edubite/api)
-│
-└── 📦 PACKAGES (`/packages`)
-    └── config/              <-- Shared Monorepo Configs & Tooling
-```
-
----
-
-## 🚀 Quick Start Commands
-
-### Frontend Commands
 ```bash
-# Run Mobile App in Expo Dev Server
-npm run start --workspace=mobile
+cp apps/mobile/.env.example apps/mobile/.env
+# Fill EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY
+# Enable Anonymous Auth in Supabase (Brain Gym uses silent device sessions — no login screen)
 
-# Run Mobile App on Android
-npm run android --workspace=mobile
+npm run start --workspace=mobile
 ```
 
----
+## Brain Gym (native)
 
-## 🔒 Security & Environment
-- **Public Client Key**: Configured in `apps/mobile/.env`.
-- **Read-Only Mode**: Frontend performs `.select()` queries using Supabase `anon` key only.
+- Hub + all **15** games run **on-device** (React Native Modal popup shell).
+- No WebView, no sign-in page.
+- Progress: silent anonymous Supabase session → `edubite_apply_brain_gym_mutation` → `edubite_brain_gym_progress` (with AsyncStorage offline cache).
+
+Key paths:
+- `apps/mobile/app/(tabs)/braingym.tsx`
+- `apps/mobile/components/brain-gym/`
+- `apps/mobile/lib/brain-gym/`

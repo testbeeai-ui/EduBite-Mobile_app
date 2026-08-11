@@ -1,13 +1,60 @@
 import { createClient } from '@supabase/supabase-js';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://bytsiknhtcnlxwzgqkrd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5dHNpa25odGNubHh3emdxa3JkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODg3MjksImV4cCI6MjA4OTc2NDcyOX0.5ORuXxKgyS75KKHEyrs8TPmXIJVOfbsPdkJg7oaBCmA';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// Create read-only Supabase client with URL and Anon Key only
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Copy apps/mobile/.env.example to apps/mobile/.env and fill values.',
+  );
+}
+
+const ExpoSecureStoreAdapter = {
+  getItem: (key: string) => {
+    if (Platform.OS === 'web') {
+      try {
+        return Promise.resolve(
+          typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null,
+        );
+      } catch {
+        return Promise.resolve(null);
+      }
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: (key: string, value: string) => {
+    if (Platform.OS === 'web') {
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+      } catch {
+        /* ignore */
+      }
+      return Promise.resolve();
+    }
+    return SecureStore.setItemAsync(key, value);
+  },
+  removeItem: (key: string) => {
+    if (Platform.OS === 'web') {
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+      } catch {
+        /* ignore */
+      }
+      return Promise.resolve();
+    }
+    return SecureStore.deleteItemAsync(key);
+  },
+};
+
+// Anon key only — never use service_role in the mobile app.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
+    storage: ExpoSecureStoreAdapter,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false,
   },
 });
 
@@ -41,12 +88,16 @@ export interface UserProfile {
   category?: string;
 }
 
+/**
+ * Learner-facing quiz row.
+ * Trust boundary: EXPO_PUBLIC anon key is world-readable. Never SELECT secrets
+ * (answer keys) into the client — server RPCs grade submissions.
+ */
 export interface ContentQuestion {
   id: string;
   domain: 'dailydose' | 'funbrain' | string;
   q: string;
   opts: string[];
-  correct: number;
   tag?: string;
   active_date?: string;
   class_level?: string;
@@ -85,13 +136,25 @@ export interface InspirationRoleModel {
 }
 
 export interface PledgeReelSlide {
-  id: string;
+  id?: string;
   day: number;
   slide_index: number;
   icon?: string;
   headline?: string;
   emphasis_word?: string;
   caption?: string;
+  pledge_slot?: string;
+}
+
+export interface PledgeReelDay {
+  day: number;
+  theme: string;
+  slides: Array<{
+    icon: string;
+    headline: string;
+    emphasisWord: string;
+    caption: string;
+  }>;
 }
 
 export interface BrainGymProgress {
@@ -106,12 +169,30 @@ export interface PuzzleProgress {
   updated_at?: string;
 }
 
+/** Learner select — answer key column intentionally omitted. */
+const CONTENT_QUESTION_PUBLIC_COLUMNS =
+  'id, domain, q, opts, tag, active_date, class_level, sort_order, published';
+
+async function requireSessionUserId(explicitUserId?: string): Promise<string | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const sessionUid = session?.user?.id ?? null;
+  if (!sessionUid) return null;
+  if (explicitUserId && explicitUserId !== sessionUid) {
+    console.warn('Refusing to fetch another user\'s row; using session uid.');
+  }
+  return sessionUid;
+}
+
 // 1. RDM REWARDS
 export async function fetchEdubiteRewards(): Promise<RdmReward[]> {
   try {
     const { data, error } = await supabase
       .from('edubite_rdm_rewards')
-      .select('*')
+      .select(
+        'reward_key, category, label, description, amount, unit, sort_order, updated_at, updated_by',
+      )
       .order('sort_order', { ascending: true });
 
     if (error) {
@@ -119,97 +200,131 @@ export async function fetchEdubiteRewards(): Promise<RdmReward[]> {
       return [];
     }
     return (data as RdmReward[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchEdubiteRewards:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchEdubiteRewards:', message);
     return [];
   }
 }
 
-// 2. GAME STATE
+// 2. GAME STATE (own row via session; writes go through edubite_save_game_state RPC)
 export async function fetchUserGameState(userId?: string): Promise<UserGameState | null> {
   try {
-    let query = supabase.from('edubite_game_state').select('*');
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query.maybeSingle();
+    const uid = await requireSessionUserId(userId);
+    if (!uid) return null;
+
+    const { data, error } = await supabase
+      .from('edubite_game_state')
+      .select('user_id, updated_at, payload')
+      .eq('user_id', uid)
+      .maybeSingle();
     if (error) {
       console.warn('RLS / fetch error for edubite_game_state:', error.message);
       return null;
     }
     return (data as UserGameState) || null;
-  } catch (err: any) {
-    console.warn('Exception in fetchUserGameState:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchUserGameState:', message);
     return null;
   }
 }
 
-// 3. USER PROFILE
+// 3. USER PROFILE (own row only)
 export async function fetchUserProfile(userId?: string): Promise<UserProfile | null> {
   try {
-    let query = supabase.from('profiles').select('*');
-    if (userId) {
-      query = query.eq('id', userId);
-    }
-    const { data, error } = await query.maybeSingle();
+    const uid = await requireSessionUserId(userId);
+    if (!uid) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, role, rdm, created_at, updated_at, state, category')
+      .eq('id', uid)
+      .maybeSingle();
     if (error) {
       console.warn('RLS / fetch error for profiles:', error.message);
       return null;
     }
     return (data as UserProfile) || null;
-  } catch (err: any) {
-    console.warn('Exception in fetchUserProfile:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchUserProfile:', message);
     return null;
   }
 }
 
-// 4. DAILY DOSE CONTENT QUESTIONS
-export async function fetchDailyDoseQuestions(classLevel?: string): Promise<ContentQuestion[]> {
+// 4. DAILY DOSE — no answer key column for learners (server grades via answers[])
+export async function fetchDailyDoseQuestions(
+  classLevel: '11' | '12' = '11',
+  activeDate: string,
+): Promise<ContentQuestion[]> {
   try {
-    let query = supabase
+    const { data, error } = await supabase
       .from('edubite_content_questions')
-      .select('*')
+      .select(CONTENT_QUESTION_PUBLIC_COLUMNS)
       .eq('domain', 'dailydose')
       .eq('published', true)
+      .eq('class_level', classLevel)
+      .eq('active_date', activeDate)
       .order('sort_order', { ascending: true })
-      .limit(10);
+      .order('id', { ascending: true })
+      .limit(5);
 
-    if (classLevel) {
-      query = query.eq('class_level', classLevel);
-    }
-
-    const { data, error } = await query;
     if (error) {
       console.warn('Error fetching DailyDose questions:', error.message);
       return [];
     }
     return (data as ContentQuestion[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchDailyDoseQuestions:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchDailyDoseQuestions:', message);
     return [];
   }
 }
 
-// 5. FUNBRAIN CONTENT QUESTIONS
-export async function fetchFunBrainQuestions(): Promise<ContentQuestion[]> {
+// 5. FUNBRAIN — no answer key column for learners
+export async function fetchFunBrainQuestions(
+  activeDate: string,
+): Promise<ContentQuestion[]> {
   try {
     const { data, error } = await supabase
       .from('edubite_content_questions')
-      .select('*')
+      .select(CONTENT_QUESTION_PUBLIC_COLUMNS)
       .eq('domain', 'funbrain')
       .eq('published', true)
+      .eq('active_date', activeDate)
       .order('sort_order', { ascending: true })
-      .limit(10);
+      .order('id', { ascending: true })
+      .limit(6);
 
     if (error) {
       console.warn('Error fetching FunBrain questions:', error.message);
       return [];
     }
     return (data as ContentQuestion[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchFunBrainQuestions:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchFunBrainQuestions:', message);
     return [];
   }
+}
+
+/** Lock today's puzzle attempt (immutable). */
+export async function lockPuzzleAttempt(attempt: {
+  puzzleId: string;
+  dateKey: string;
+  responseType: 'open-ended' | 'mcq';
+  note: string;
+  selectedOptionIndex: number | null;
+}): Promise<{ inserted: boolean } | null> {
+  const { data, error } = await supabase.rpc('edubite_lock_puzzle_attempt', {
+    p_attempt: attempt,
+  });
+  if (error) {
+    console.warn('edubite_lock_puzzle_attempt failed:', error.message);
+    return null;
+  }
+  return { inserted: Boolean((data as { inserted?: boolean } | null)?.inserted) };
 }
 
 // 6. INSPIRATION DATA
@@ -217,15 +332,17 @@ export async function fetchInspirationQuotes(): Promise<InspirationQuote[]> {
   try {
     const { data, error } = await supabase
       .from('edubite_inspiration_quotes')
-      .select('*')
-      .limit(10);
+      .select('id, quote, category, content_key, sort_order')
+      .order('sort_order', { ascending: true })
+      .limit(500);
     if (error) {
       console.warn('Error fetching inspiration quotes:', error.message);
       return [];
     }
     return (data as InspirationQuote[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchInspirationQuotes:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchInspirationQuotes:', message);
     return [];
   }
 }
@@ -234,15 +351,18 @@ export async function fetchInspirationPhenomena(): Promise<InspirationPhenomena[
   try {
     const { data, error } = await supabase
       .from('edubite_inspiration_phenomena')
-      .select('*')
-      .limit(10);
+      .select('id, subject, icon, badge, question, explanation, volume, number')
+      .order('volume', { ascending: true })
+      .order('number', { ascending: true })
+      .limit(500);
     if (error) {
       console.warn('Error fetching inspiration phenomena:', error.message);
       return [];
     }
     return (data as InspirationPhenomena[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchInspirationPhenomena:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchInspirationPhenomena:', message);
     return [];
   }
 }
@@ -251,54 +371,135 @@ export async function fetchInspirationRoleModels(): Promise<InspirationRoleModel
   try {
     const { data, error } = await supabase
       .from('edubite_inspiration_role_models')
-      .select('*')
-      .limit(10);
+      .select('id, name, tag, quote, bio, avatar, volume, number')
+      .order('volume', { ascending: true })
+      .order('number', { ascending: true })
+      .limit(500);
     if (error) {
       console.warn('Error fetching inspiration role models:', error.message);
       return [];
     }
     return (data as InspirationRoleModel[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchInspirationRoleModels:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchInspirationRoleModels:', message);
     return [];
   }
 }
 
+/** Learner enroll into monthly challenge (no admin UI). */
+export async function enrollMonthlyChallenge(args: {
+  monthKey: string;
+  displayName: string;
+  dateKey?: string;
+}): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase.rpc('edubite_enroll_monthly_challenge', {
+    p_month_key: args.monthKey,
+    p_display_name: args.displayName,
+    p_date_key: args.dateKey ?? null,
+  });
+  if (error) {
+    console.warn('edubite_enroll_monthly_challenge failed:', error.message);
+    return null;
+  }
+  return (data as Record<string, unknown>) ?? null;
+}
+
 // 7. PLEDGE REEL SLIDES
-export async function fetchPledgeReelSlides(day: number = 1): Promise<PledgeReelSlide[]> {
+export async function fetchPledgeReelSlides(
+  day: number = 1,
+  slot: 'am' | 'pm' = 'am',
+): Promise<PledgeReelSlide[]> {
   try {
-    const { data, error } = await supabase
+    const slotted = await supabase
       .from('edubite_pledge_reel_slides')
-      .select('*')
+      .select('id, day, slide_index, icon, headline, emphasis_word, caption, pledge_slot')
+      .eq('day', day)
+      .eq('pledge_slot', slot)
+      .order('slide_index', { ascending: true });
+
+    if (!slotted.error && slotted.data?.length) {
+      return slotted.data as PledgeReelSlide[];
+    }
+
+    // Older rows may lack pledge_slot — fall back to day-only.
+    const fallback = await supabase
+      .from('edubite_pledge_reel_slides')
+      .select('id, day, slide_index, icon, headline, emphasis_word, caption, pledge_slot')
       .eq('day', day)
       .order('slide_index', { ascending: true });
 
-    if (error) {
-      console.warn('Error fetching pledge reel slides:', error.message);
+    if (fallback.error) {
+      console.warn('Error fetching pledge reel slides:', fallback.error.message);
       return [];
     }
-    return (data as PledgeReelSlide[]) || [];
-  } catch (err: any) {
-    console.warn('Exception in fetchPledgeReelSlides:', err?.message || err);
+    return (fallback.data as PledgeReelSlide[]) || [];
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchPledgeReelSlides:', message);
     return [];
+  }
+}
+
+/** Load a full 4-slide reel for AM/PM + journey day (matches web pledge-reel API). */
+export async function fetchPledgeReelDay(
+  slot: 'am' | 'pm',
+  day: number,
+): Promise<PledgeReelDay | null> {
+  try {
+    const [{ data: dayRow }, slides] = await Promise.all([
+      supabase
+        .from('edubite_pledge_reel_days')
+        .select('day, theme, pledge_slot')
+        .eq('day', day)
+        .eq('pledge_slot', slot)
+        .maybeSingle(),
+      fetchPledgeReelSlides(day, slot),
+    ]);
+
+    if (slides.length < 4) return null;
+
+    const ordered = [...slides]
+      .sort((a, b) => a.slide_index - b.slide_index)
+      .slice(0, 4)
+      .map((s) => ({
+        icon: s.icon || '🧠',
+        headline: s.headline || '',
+        emphasisWord: s.emphasis_word || '',
+        caption: s.caption || '',
+      }));
+
+    return {
+      day,
+      theme: (dayRow as { theme?: string } | null)?.theme || `Day ${day}`,
+      slides: ordered,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchPledgeReelDay:', message);
+    return null;
   }
 }
 
 // 8. BRAIN GYM PROGRESS
 export async function fetchBrainGymProgress(userId?: string): Promise<BrainGymProgress | null> {
   try {
-    let query = supabase.from('edubite_brain_gym_progress').select('*');
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query.maybeSingle();
+    const uid = await requireSessionUserId(userId);
+    if (!uid) return null;
+
+    const { data, error } = await supabase
+      .from('edubite_brain_gym_progress')
+      .select('user_id, payload, updated_at')
+      .eq('user_id', uid)
+      .maybeSingle();
     if (error) {
       console.warn('Error/RLS fetching Brain Gym progress:', error.message);
       return null;
     }
     return (data as BrainGymProgress) || null;
-  } catch (err: any) {
-    console.warn('Exception in fetchBrainGymProgress:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchBrainGymProgress:', message);
     return null;
   }
 }
@@ -306,18 +507,34 @@ export async function fetchBrainGymProgress(userId?: string): Promise<BrainGymPr
 // 9. PUZZLE PROGRESS
 export async function fetchPuzzleProgress(userId?: string): Promise<PuzzleProgress | null> {
   try {
-    let query = supabase.from('edubite_puzzle_progress').select('*');
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query.maybeSingle();
+    const uid = await requireSessionUserId(userId);
+    if (!uid) return null;
+
+    const { data, error } = await supabase
+      .from('edubite_puzzle_progress')
+      .select('user_id, payload, updated_at')
+      .eq('user_id', uid)
+      .maybeSingle();
     if (error) {
       console.warn('Error/RLS fetching Puzzle progress:', error.message);
       return null;
     }
     return (data as PuzzleProgress) || null;
-  } catch (err: any) {
-    console.warn('Exception in fetchPuzzleProgress:', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Exception in fetchPuzzleProgress:', message);
     return null;
   }
+}
+
+/** Server-authoritative progress write (grades answers server-side). Requires auth session. */
+export async function saveGameState(payload: Record<string, unknown>) {
+  const { data, error } = await supabase.rpc('edubite_save_game_state', {
+    p_payload: payload,
+  });
+  if (error) {
+    console.warn('edubite_save_game_state failed:', error.message);
+    return null;
+  }
+  return data;
 }

@@ -1,216 +1,421 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { theme, ProgressTrack, CountdownTimer, QuizOption, SubjectPills, OptionState } from '@edubite/ui';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
+import {
+  theme,
+  ProgressTrack,
+  CountdownTimer,
+  QuizOption,
+  OptionState,
+} from '@edubite/ui';
 import { useRouter } from 'expo-router';
-import { useEdubiteData } from '../../hooks/useEdubiteData';
-
-const defaultQuestions = [
-  { subject:"chemistry", tag:"Chemistry · Mole Concept",
-    text:"How many moles are in 44 g of CO₂? (Molar mass = 44 g/mol)",
-    opts:["0.5 mol","1 mol","2 mol","4 mol"], correct:1 },
-  { subject:"maths", tag:"Maths · Quadratic Equations",
-    text:"Find the roots of x² − 5x + 6 = 0.",
-    opts:["x = 2, 3","x = 1, 6","x = −2, −3","x = 5, 6"], correct:0 },
-  { subject:"physics", tag:"Physics · Laws of Motion",
-    text:"A 2 kg block is pushed with a 10 N force. Find its acceleration.",
-    opts:["5 m/s²","0.2 m/s²","20 m/s²","2 m/s²"], correct:0 },
-  { subject:"physics", tag:"Physics · Current Electricity",
-    text:"Two capacitors of 5 µF and 3 µF are connected in series. Find the equivalent capacitance.",
-    opts:["3.76 µF","2.88 µF","1.88 µF","8 µF"], correct:2 },
-  { subject:"chemistry", tag:"Chemistry · Periodic Table",
-    text:"Which element has atomic number 11?",
-    opts:["Magnesium","Sodium","Neon","Potassium"], correct:1 },
-];
+import { AnswerReviewList } from '../../components/quiz/AnswerReviewList';
+import {
+  loadTodayDailyDose,
+  type LearnerQuestion,
+} from '../../lib/content/today-questions';
+import { useGame } from '../../lib/game/GameProvider';
+import { todayKey } from '../../lib/game/date';
+import { DOSE_DURATION_SEC } from '../../lib/game/state';
 
 export default function DailyDoseScreen() {
   const router = useRouter();
-  const { rewardMap, dailyDoseQuestions } = useEdubiteData();
+  const {
+    state,
+    rewardMap,
+    completeDose,
+    setClassLevel,
+    startDose,
+    resetDose,
+  } = useGame();
   const dosePerCorrect = rewardMap['dose.per_correct']?.amount ?? 10;
+  const doseMinutes = Math.round(DOSE_DURATION_SEC / 60);
 
-  const activeQuestions = dailyDoseQuestions.length > 0
-    ? dailyDoseQuestions.map(q => ({
-        subject: (q.tag || '').toLowerCase().includes('chem') ? 'chemistry' : (q.tag || '').toLowerCase().includes('math') ? 'maths' : 'physics',
-        tag: q.tag || 'DailyDose Question',
-        text: q.q,
-        opts: q.opts || [],
-        correct: q.correct ?? 0,
-      }))
-    : defaultQuestions;
+  const classLevel: '11' | '12' =
+    state.dose.currentClass === '12' ? '12' : '11';
+  const classChosen = state.dose.classChosen;
+  const classDone =
+    classLevel === '11' ? state.dose.completed11 : state.dose.completed12;
+  const running = state.dose.running && !classDone;
+  const today = todayKey();
+  const dayLog = state.doseDayLog[today];
+  const savedAnswers =
+    classLevel === '11' ? state.dose.answers11 : state.dose.answers12;
 
-  const [activeClass, setActiveClass] = useState('c11');
-  
-  // Quiz State
+  const [questions, setQuestions] = useState<LearnerQuestion[]>([]);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [totalSeconds, setTotalSeconds] = useState(240);
+  const [answers, setAnswers] = useState<number[]>([]);
+  const [totalSeconds, setTotalSeconds] = useState(DOSE_DURATION_SEC);
   const [answered, setAnswered] = useState(false);
   const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const finishCalled = useRef(false);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+
+  const resetLocalQuiz = useCallback(() => {
+    setIdx(0);
+    setAnswers([]);
+    setTotalSeconds(DOSE_DURATION_SEC);
+    setAnswered(false);
+    setSelectedOpt(null);
+    setIsFinished(false);
+    finishCalled.current = false;
+  }, []);
 
   useEffect(() => {
-    if (isFinished) return;
-    
+    if (!classChosen) return;
+    let cancelled = false;
+    const alreadyDone =
+      classLevel === '11' ? state.dose.completed11 : state.dose.completed12;
+    setLoadingQuestions(true);
+    setLoadError(null);
+    if (!alreadyDone) resetLocalQuiz();
+    void loadTodayDailyDose(classLevel)
+      .then(({ scheduleDate: sd, questions: qs }) => {
+        if (cancelled) return;
+        setScheduleDate(sd);
+        setQuestions(qs);
+        if (qs.length === 0) {
+          setLoadError('No published DailyDose questions for today yet.');
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setQuestions([]);
+        setLoadError(
+          err instanceof Error ? err.message : 'Failed to load today\'s questions.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingQuestions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally only reload when class bank changes — not on complete/replay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classLevel, classChosen, resetLocalQuiz]);
+
+  const finishQuiz = useCallback(
+    async (finalAnswers: number[]) => {
+      if (finishCalled.current || classDone) return;
+      finishCalled.current = true;
+      // Server grades from answers[] — client never holds answer keys.
+      await completeDose({
+        classLevel,
+        answers: finalAnswers,
+        correct: 0,
+        total: questions.length,
+      });
+      setIsFinished(true);
+    },
+    [classDone, classLevel, completeDose, questions.length],
+  );
+
+  useEffect(() => {
+    if (!running || classDone || isFinished || loadingQuestions) return;
+    if (questions.length === 0) return;
+
     const timer = setInterval(() => {
       setTotalSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setIsFinished(true);
+          void finishQuiz(answersRef.current);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    
+
     return () => clearInterval(timer);
-  }, [isFinished]);
+  }, [
+    running,
+    classDone,
+    finishQuiz,
+    isFinished,
+    loadingQuestions,
+    questions.length,
+  ]);
+
+  const switchClass = (next: '11' | '12') => {
+    if (next === classLevel || running) return;
+    setClassLevel(next);
+  };
+
+  const handleStart = () => {
+    if (questions.length === 0 || classDone) return;
+    resetLocalQuiz();
+    startDose();
+  };
+
+  const handleReplay = () => {
+    if (questions.length === 0) return;
+    resetLocalQuiz();
+    // Defer provider updates so we never setState in GameProvider during this render pass.
+    queueMicrotask(() => {
+      resetDose();
+      startDose();
+    });
+  };
 
   const selectAnswer = (i: number) => {
-    if (answered) return;
+    if (!running || answered || classDone || isFinished) return;
     setAnswered(true);
     setSelectedOpt(i);
-    
-    const q = activeQuestions[idx];
-    if (i === q.correct) {
-      setCorrectCount(prev => prev + 1);
-    }
-    
-    // TODO: Read-only mode - quiz attempt mutations disabled
+
+    const nextAnswers = [...answers];
+    nextAnswers[idx] = i;
+    setAnswers(nextAnswers);
+
     setTimeout(() => {
-      if (idx < activeQuestions.length - 1) {
-        setIdx(prev => prev + 1);
+      if (idx < questions.length - 1) {
+        setIdx((prev) => prev + 1);
         setAnswered(false);
         setSelectedOpt(null);
       } else {
-        setIsFinished(true);
+        void finishQuiz(nextAnswers);
       }
-    }, 700);
+    }, 400);
   };
 
-  const currentQ = activeQuestions[idx] || activeQuestions[0];
+  const showCompleted = classDone || isFinished;
+  const displayAnswers = savedAnswers.length ? savedAnswers : answers;
+  const answeredCount = displayAnswers.filter((a) => typeof a === 'number').length;
+  const displayCorrect =
+    dayLog?.classLevel === classLevel ? dayLog.correct : 0;
+  const displayTotal =
+    dayLog?.classLevel === classLevel
+      ? dayLog.total
+      : questions.length || answeredCount;
+  const earnedRdm = displayCorrect * dosePerCorrect;
+
+  const currentQ = questions[idx];
 
   const getOptionState = (optIndex: number): OptionState => {
     if (!answered) return 'default';
-    if (optIndex === currentQ.correct) return 'correct';
-    if (optIndex === selectedOpt) return 'wrong';
+    // Highlight pick only — no answer-key feedback on device.
+    if (optIndex === selectedOpt) return 'correct';
     return 'default';
   };
 
+  if (loadingQuestions && classChosen && questions.length === 0) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={theme.colors.teal} />
+        <Text style={styles.loadingText}>Loading today&apos;s questions from DB…</Text>
+      </View>
+    );
+  }
+
+  if (!classChosen) {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.eyebrowRow}>
+          <View style={styles.dot} />
+          <Text style={styles.eyebrowText}>FUNCTION 01</Text>
+        </View>
+        <Text style={styles.title}>DailyDose</Text>
+        <Text style={styles.subtitle}>
+          Choose your class once — we&apos;ll load today&apos;s published questions.
+        </Text>
+
+        <View style={styles.startCard}>
+          <Text style={styles.startTitle}>Which class are you in?</Text>
+          <Text style={styles.startMeta}>
+            Pick 11th or 12th for today&apos;s PCM bank from Supabase.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.classPickBtn}
+            onPress={() => setClassLevel('11')}
+          >
+            <Text style={styles.classPickTitle}>Class 11th</Text>
+            <Text style={styles.classPickSub}>Today&apos;s published set</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.classPickBtn}
+            onPress={() => setClassLevel('12')}
+          >
+            <Text style={styles.classPickTitle}>Class 12th</Text>
+            <Text style={styles.classPickSub}>Today&apos;s published set</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ height: 30 }} />
+      </ScrollView>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-      
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.eyebrowRow}>
         <View style={styles.dot} />
         <Text style={styles.eyebrowText}>FUNCTION 01</Text>
       </View>
-      
+
       <View style={styles.headRow}>
         <Text style={styles.title}>DailyDose</Text>
-        <View style={styles.classToggle}>
-          <TouchableOpacity 
-            style={[styles.toggleBtn, activeClass === 'c11' && styles.toggleBtnActive]} 
-            onPress={() => setActiveClass('c11')}
+        <View style={[styles.classToggle, running && styles.classToggleDisabled]}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, classLevel === '11' && styles.toggleBtnActive]}
+            onPress={() => switchClass('11')}
+            disabled={running}
           >
-            <Text style={[styles.toggleBtnText, activeClass === 'c11' && styles.toggleBtnTextActive]}>Class 11th</Text>
+            <Text
+              style={[
+                styles.toggleBtnText,
+                classLevel === '11' && styles.toggleBtnTextActive,
+              ]}
+            >
+              Class 11th
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.toggleBtn, activeClass === 'c12' && styles.toggleBtnActive]} 
-            onPress={() => setActiveClass('c12')}
+          <TouchableOpacity
+            style={[styles.toggleBtn, classLevel === '12' && styles.toggleBtnActive]}
+            onPress={() => switchClass('12')}
+            disabled={running}
           >
-            <Text style={[styles.toggleBtnText, activeClass === 'c12' && styles.toggleBtnTextActive]}>Class 12th</Text>
+            <Text
+              style={[
+                styles.toggleBtnText,
+                classLevel === '12' && styles.toggleBtnTextActive,
+              ]}
+            >
+              Class 12th
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <Text style={styles.subtitle}>
-        {isFinished ? "Nice work — see your results below." : "DailyDose in progress — finish before the timer ends."}
+        {showCompleted
+          ? 'Nice work — see your results below.'
+          : running
+            ? 'DailyDose in progress — finish before the timer ends.'
+            : `${doseMinutes}-minute timer · today&apos;s published questions from DB.`}
       </Text>
 
-      {!isFinished ? (
+      {showCompleted ? (
+        <>
+          <View style={styles.completeCard}>
+            <View style={styles.completeWrap}>
+              <Text style={styles.earnedBig}>
+                {dayLog?.classLevel === classLevel
+                  ? `${earnedRdm} RDM earned today`
+                  : 'Dose submitted'}
+              </Text>
+              <Text style={styles.completeSub}>
+                {answeredCount} of {displayTotal || questions.length || 5} answered
+                {dayLog?.classLevel === classLevel
+                  ? ` · ${displayCorrect} correct after server grade`
+                  : ' · scoring syncs when session can save'}
+                . Finish Fun Brain, Puzzles, Habits, and Pledge too for streak.
+              </Text>
+              {scheduleDate ? (
+                <Text style={styles.scheduleLine}>DB schedule · {scheduleDate}</Text>
+              ) : null}
+
+              <TouchableOpacity style={styles.replayBtn} onPress={handleReplay}>
+                <Text style={styles.replayBtnText}>Replay DailyDose</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.navigate('/')} style={styles.doneBtn}>
+                <Text style={styles.doneBtnText}>Back to Home</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <AnswerReviewList questions={questions} answers={displayAnswers} />
+        </>
+      ) : !running ? (
+        <View style={styles.startCard}>
+          <Text style={styles.startTitle}>DailyDose</Text>
+          <Text style={styles.startMeta}>
+            {doseMinutes}-minute timer · {questions.length || 0} questions · Class{' '}
+            {classLevel}
+          </Text>
+          {scheduleDate ? (
+            <Text style={styles.scheduleLine}>DB schedule date · {scheduleDate}</Text>
+          ) : null}
+          {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
+          <Text style={styles.startHint}>
+            When the timer hits zero, the exam stops. RDM is credited once per day from
+            server grading.
+          </Text>
+          <TouchableOpacity
+            style={[styles.startBtn, questions.length === 0 && styles.startBtnDisabled]}
+            onPress={handleStart}
+            disabled={questions.length === 0}
+          >
+            <Text style={styles.startBtnText}>Start DailyDose →</Text>
+          </TouchableOpacity>
+        </View>
+      ) : currentQ ? (
         <View style={styles.quizCard}>
           <View style={styles.qtop}>
-            <Text style={styles.qcount}>{idx + 1}/{activeQuestions.length}</Text>
-            <ProgressTrack progress={(idx + 1) / activeQuestions.length} />
+            <Text style={styles.qcount}>
+              {idx + 1}/{questions.length}
+            </Text>
+            <ProgressTrack progress={(idx + 1) / Math.max(questions.length, 1)} />
             <CountdownTimer totalSeconds={totalSeconds} />
           </View>
 
-          <Text style={[styles.qtag, { 
-            color: currentQ.subject === 'physics' ? theme.colors.teal : 
-                   currentQ.subject === 'chemistry' ? theme.colors.purple : theme.colors.amber 
-          }]}>
-            {currentQ.tag}
-          </Text>
-          
+          {currentQ.tag ? <Text style={styles.qtag}>{currentQ.tag}</Text> : null}
           <Text style={styles.qtext}>{currentQ.text}</Text>
 
           <View style={styles.opts}>
             {currentQ.opts.map((opt, i) => (
-              <QuizOption 
-                key={i} 
-                label={opt} 
-                state={getOptionState(i)} 
-                onPress={() => selectAnswer(i)} 
-                disabled={answered} 
+              <QuizOption
+                key={`${currentQ.id}-${i}`}
+                label={opt}
+                state={getOptionState(i)}
+                onPress={() => selectAnswer(i)}
+                disabled={answered}
               />
             ))}
           </View>
-
-          <SubjectPills subjects={['physics', 'chemistry', 'maths']} activeSubject={currentQ.subject} />
         </View>
       ) : (
-        <View style={styles.completeCard}>
-          <View style={styles.completeWrap}>
-            <View style={styles.completeIcon}><Text style={styles.completeIconText}>🎉</Text></View>
-            <Text style={styles.completeTitle}>Today's dose complete!</Text>
-            <Text style={styles.completeSub}>You answered {activeQuestions.length}/{activeQuestions.length} questions across Physics, Chemistry & Maths.</Text>
-            
-            <View style={styles.completeStats}>
-              <View style={styles.cstat}>
-                <Text style={styles.cv}>{correctCount}/{activeQuestions.length}</Text>
-                <Text style={styles.ck}>CORRECT</Text>
-              </View>
-              <View style={styles.cstat}>
-                <Text style={styles.cv}>+{correctCount * dosePerCorrect}</Text>
-                <Text style={styles.ck}>RDM EARNED</Text>
-              </View>
-              <View style={styles.cstat}>
-                <Text style={styles.cv}>{Math.floor(totalSeconds / 60)}:{totalSeconds % 60 < 10 ? '0' : ''}{totalSeconds % 60}</Text>
-                <Text style={styles.ck}>TIME LEFT</Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity onPress={() => router.navigate('/')} style={styles.doneBtn}>
-              <Text style={styles.doneBtnText}>Back to Home</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.startCard}>
+          <Text style={styles.errorText}>
+            {loadError || 'No questions available to start.'}
+          </Text>
         </View>
       )}
-      
+
       <View style={{ height: 30 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bg,
+  container: { flex: 1, backgroundColor: theme.colors.bg },
+  centered: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: theme.colors.textDim,
+    fontFamily: theme.fonts.body,
   },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 26,
-  },
-  eyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.amber,
-  },
+  contentContainer: { padding: 16, paddingBottom: 26 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.amber },
   eyebrowText: {
     fontSize: 10.5,
     fontWeight: '800',
@@ -240,27 +445,104 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     padding: 3,
   },
-  toggleBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  toggleBtnActive: {
-    backgroundColor: theme.colors.cardHi,
-  },
+  classToggleDisabled: { opacity: 0.55 },
+  toggleBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999 },
+  toggleBtnActive: { backgroundColor: theme.colors.cardHi },
   toggleBtnText: {
     color: theme.colors.textFaint,
     fontSize: 10.5,
     fontWeight: '700',
     fontFamily: theme.fonts.body,
   },
-  toggleBtnTextActive: {
-    color: theme.colors.text,
-  },
+  toggleBtnTextActive: { color: theme.colors.text },
   subtitle: {
     fontSize: 11.5,
     color: theme.colors.textDim,
     marginBottom: 16,
+    fontFamily: theme.fonts.body,
+  },
+  startCard: {
+    backgroundColor: theme.colors.card,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  startTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.heading,
+    textAlign: 'center',
+  },
+  startMeta: {
+    marginTop: 8,
+    fontSize: 13,
+    color: theme.colors.textDim,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
+  },
+  scheduleLine: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.teal,
+    fontFamily: theme.fonts.body,
+  },
+  startHint: {
+    marginTop: 12,
+    fontSize: 11.5,
+    color: theme.colors.textFaint,
+    textAlign: 'center',
+    lineHeight: 17,
+    maxWidth: 320,
+    fontFamily: theme.fonts.body,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: theme.colors.pink,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
+  },
+  startBtn: {
+    marginTop: 28,
+    backgroundColor: theme.colors.teal,
+    paddingVertical: 13,
+    paddingHorizontal: 22,
+    borderRadius: 13,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  startBtnDisabled: { opacity: 0.45 },
+  startBtnText: {
+    color: '#08130F',
+    fontWeight: '800',
+    fontSize: 14,
+    fontFamily: theme.fonts.body,
+  },
+  classPickBtn: {
+    marginTop: 12,
+    width: '100%',
+    backgroundColor: theme.colors.cardHi,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  classPickTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.heading,
+  },
+  classPickSub: {
+    marginTop: 3,
+    fontSize: 11,
+    color: theme.colors.textFaint,
     fontFamily: theme.fonts.body,
   },
   quizCard: {
@@ -289,19 +571,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 9,
+    color: theme.colors.teal,
     fontFamily: theme.fonts.body,
   },
   qtext: {
     fontSize: 15,
     fontWeight: '700',
-    lineHeight: 21.75, // 15 * 1.45
+    lineHeight: 21.75,
     marginBottom: 16,
     color: theme.colors.text,
     fontFamily: theme.fonts.body,
   },
-  opts: {
-    // container for options
-  },
+  opts: {},
   completeCard: {
     backgroundColor: theme.colors.card,
     borderColor: theme.colors.border,
@@ -311,72 +592,48 @@ const styles = StyleSheet.create({
   },
   completeWrap: {
     alignItems: 'center',
-    paddingTop: 14,
+    paddingTop: 18,
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
-  completeIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.colors.tealSoft,
-    borderColor: 'rgba(29,158,117,0.35)',
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  completeIconText: {
+  earnedBig: {
     fontSize: 28,
-  },
-  completeTitle: {
-    fontSize: 18,
     fontWeight: '800',
+    color: theme.colors.teal,
     fontFamily: theme.fonts.heading,
-    color: theme.colors.text,
+    textAlign: 'center',
   },
   completeSub: {
     fontSize: 12,
     color: theme.colors.textDim,
-    marginTop: 6,
-    marginBottom: 18,
+    marginTop: 8,
+    marginBottom: 10,
     textAlign: 'center',
+    lineHeight: 18,
     fontFamily: theme.fonts.body,
   },
-  completeStats: {
-    flexDirection: 'row',
-    gap: 9,
-    marginBottom: 20,
+  replayBtn: {
     width: '100%',
-  },
-  cstat: {
-    flex: 1,
-    backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
-    borderWidth: 1,
+    marginTop: 10,
+    padding: 13,
     borderRadius: 13,
-    paddingVertical: 11,
-    paddingHorizontal: 6,
+    backgroundColor: theme.colors.cardHi,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     alignItems: 'center',
   },
-  cv: {
-    fontFamily: theme.fonts.heading,
-    fontWeight: '800',
-    fontSize: 15,
+  replayBtnText: {
     color: theme.colors.text,
-  },
-  ck: {
-    fontSize: 8.5,
-    color: theme.colors.textFaint,
-    textTransform: 'uppercase',
-    marginTop: 2,
+    fontWeight: '800',
+    fontSize: 13.5,
     fontFamily: theme.fonts.body,
   },
   doneBtn: {
     width: '100%',
+    marginTop: 10,
     padding: 13,
     borderRadius: 13,
-    backgroundColor: theme.colors.teal, // using solid teal instead of gradient for simplicity, or we can use expo-linear-gradient
+    backgroundColor: theme.colors.teal,
     alignItems: 'center',
   },
   doneBtnText: {
@@ -384,5 +641,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 13.5,
     fontFamily: theme.fonts.body,
-  }
+  },
 });

@@ -1,202 +1,319 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { theme, ProgressTrack, CountdownTimer, QuizOption, SubjectPills, OptionState } from '@edubite/ui';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
+import {
+  theme,
+  ProgressTrack,
+  CountdownTimer,
+  QuizOption,
+  OptionState,
+} from '@edubite/ui';
 import { useRouter } from 'expo-router';
-import { useEdubiteData } from '../../hooks/useEdubiteData';
-
-const defaultQuestions = [
-  { subject:"gk", tag:"General Knowledge",
-    text:"A person who studies ancient inscriptions is called:",
-    opts:["Numismatist","Epigraphist","Cartographer","Anthropologist"], correct:1 },
-  { subject:"quantitative", tag:"Quantitative Ability",
-    text:"A train travels 180 km in 3 hours. What is its speed?",
-    opts:["40 km/h","60 km/h","90 km/h","30 km/h"], correct:1 },
-  { subject:"analytical", tag:"Analytical Ability",
-    text:"Which number comes next: 2, 6, 12, 20, 30, ?",
-    opts:["40","42","36","44"], correct:1 },
-  { subject:"verbal", tag:"Verbal Ability",
-    text:"Choose the synonym of ‘Eloquent’:",
-    opts:["Articulate","Silent","Confused","Rude"], correct:0 },
-  { subject:"gk", tag:"General Knowledge",
-    text:"Which is the smallest planet in our solar system?",
-    opts:["Earth","Venus","Mercury","Mars"], correct:2 },
-  { subject:"quantitative", tag:"Quantitative Ability",
-    text:"What is 15% of 200?",
-    opts:["20","30","35","25"], correct:1 },
-];
+import { AnswerReviewList } from '../../components/quiz/AnswerReviewList';
+import {
+  loadTodayFunBrain,
+  type LearnerQuestion,
+} from '../../lib/content/today-questions';
+import { useGame } from '../../lib/game/GameProvider';
+import { FUNBRAIN_DURATION_SEC } from '../../lib/game/state';
 
 export default function FunBrainScreen() {
   const router = useRouter();
-  const { rewardMap, funBrainQuestions } = useEdubiteData();
-  const basePoints = rewardMap['funbrain.base_points']?.amount ?? 10;
+  const { state, completeFunbrain, startFunbrain, resetFunbrain } = useGame();
+  const sprintMinutes = Math.round(FUNBRAIN_DURATION_SEC / 60);
 
-  const activeQuestions = funBrainQuestions.length > 0
-    ? funBrainQuestions.map(q => ({
-        subject: (q.tag || '').toLowerCase().includes('verb') ? 'verbal' : (q.tag || '').toLowerCase().includes('quant') ? 'quantitative' : 'analytical',
-        tag: q.tag || 'FunBrain Sprint',
-        text: q.q,
-        opts: q.opts || [],
-        correct: q.correct ?? 0,
-      }))
-    : defaultQuestions;
+  const alreadyCompleted = state.funbrain.completed || state.funbrain.finished;
+  const running = state.funbrain.running && !alreadyCompleted;
 
-  // Quiz State
+  const [questions, setQuestions] = useState<LearnerQuestion[]>([]);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [totalSeconds, setTotalSeconds] = useState(360);
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const [score, setScore] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(FUNBRAIN_DURATION_SEC);
   const [answered, setAnswered] = useState(false);
   const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const finishCalled = useRef(false);
+  const answersRef = useRef(answers);
+  const scoreRef = useRef(score);
+  const comboRef = useRef(combo);
+  answersRef.current = answers;
+  scoreRef.current = score;
+  comboRef.current = combo;
+
+  const resetLocalQuiz = useCallback(() => {
+    setIdx(0);
+    setAnswers([]);
+    setScore(0);
+    setCombo(0);
+    setTotalSeconds(FUNBRAIN_DURATION_SEC);
+    setAnswered(false);
+    setSelectedOpt(null);
+    setIsFinished(false);
+    finishCalled.current = false;
+  }, []);
 
   useEffect(() => {
-    if (isFinished) return;
-    
+    let cancelled = false;
+    setLoadingQuestions(true);
+    setLoadError(null);
+    resetLocalQuiz();
+    void loadTodayFunBrain()
+      .then(({ scheduleDate: sd, questions: qs }) => {
+        if (cancelled) return;
+        setScheduleDate(sd);
+        setQuestions(qs);
+        if (qs.length === 0) {
+          setLoadError('No published FunBrain questions for today yet.');
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setQuestions([]);
+        setLoadError(
+          err instanceof Error ? err.message : 'Failed to load today\'s sprint.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingQuestions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [resetLocalQuiz]);
+
+  const finishQuiz = useCallback(
+    async (
+      finalAnswers: (number | null)[],
+      finalScore: number,
+      finalCombo: number,
+    ) => {
+      if (finishCalled.current || alreadyCompleted) return;
+      finishCalled.current = true;
+      await completeFunbrain({
+        answers: finalAnswers,
+        score: finalScore,
+        combo: finalCombo,
+      });
+      setIsFinished(true);
+    },
+    [alreadyCompleted, completeFunbrain],
+  );
+
+  useEffect(() => {
+    if (!running || alreadyCompleted || isFinished || loadingQuestions) return;
+    if (questions.length === 0) return;
+
     const timer = setInterval(() => {
       setTotalSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setIsFinished(true);
+          void finishQuiz(answersRef.current, scoreRef.current, comboRef.current);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    
+
     return () => clearInterval(timer);
-  }, [isFinished]);
+  }, [
+    running,
+    alreadyCompleted,
+    finishQuiz,
+    isFinished,
+    loadingQuestions,
+    questions.length,
+  ]);
+
+  const handleStart = () => {
+    if (questions.length === 0 || alreadyCompleted) return;
+    resetLocalQuiz();
+    startFunbrain();
+  };
+
+  const handleReplay = () => {
+    if (questions.length === 0) return;
+    resetLocalQuiz();
+    queueMicrotask(() => {
+      resetFunbrain();
+      startFunbrain();
+    });
+  };
 
   const selectAnswer = (i: number) => {
-    if (answered) return;
+    if (!running || answered || alreadyCompleted || isFinished) return;
     setAnswered(true);
     setSelectedOpt(i);
-    
-    const q = activeQuestions[idx];
-    if (i === q.correct) {
-      setCorrectCount(prev => prev + 1);
-    }
-    
-    // TODO: Read-only mode - sprint completion write disabled
+
+    // Participation score only — no client answer keys.
+    const nextCombo = combo + 1;
+    const nextScore = score + 10 + combo * 5;
+    const nextAnswers = [...answers];
+    nextAnswers[idx] = i;
+    setAnswers(nextAnswers);
+    setScore(nextScore);
+    setCombo(nextCombo);
+
     setTimeout(() => {
-      if (idx < activeQuestions.length - 1) {
-        setIdx(prev => prev + 1);
+      if (idx < questions.length - 1) {
+        setIdx((prev) => prev + 1);
         setAnswered(false);
         setSelectedOpt(null);
       } else {
-        setIsFinished(true);
+        void finishQuiz(nextAnswers, nextScore, nextCombo);
       }
-    }, 700);
+    }, 400);
   };
 
-  const currentQ = activeQuestions[idx] || activeQuestions[0];
+  const showCompleted = alreadyCompleted || isFinished;
+  const displayScore = alreadyCompleted ? state.funbrain.score : score;
+  const displayAnswers = alreadyCompleted ? state.funbrain.answers : answers;
+  const answeredCount = displayAnswers.filter((a) => a != null).length;
+  const currentQ = questions[idx];
 
   const getOptionState = (optIndex: number): OptionState => {
     if (!answered) return 'default';
-    if (optIndex === currentQ.correct) return 'correct';
-    if (optIndex === selectedOpt) return 'wrong';
+    if (optIndex === selectedOpt) return 'correct';
     return 'default';
   };
 
+  if (loadingQuestions && questions.length === 0) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={theme.colors.amber} />
+        <Text style={styles.loadingText}>Loading today&apos;s sprint from DB…</Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-      
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.eyebrowRow}>
         <View style={styles.dot} />
         <Text style={styles.eyebrowText}>FUNCTION 02 · DAILY SPRINT</Text>
       </View>
-      
+
       <Text style={styles.title}>FunBrain</Text>
-      
+
       <Text style={styles.subtitle}>
-        {isFinished ? "Nice work — see your sprint results below." : "FunBrain sprint in progress — answer questions before time runs out."}
+        {showCompleted
+          ? 'Nice work — see your sprint results below.'
+          : running
+            ? 'FunBrain sprint in progress — answer before time runs out.'
+            : `${sprintMinutes}-minute Quick Sprint · today&apos;s published set from DB.`}
       </Text>
 
-      {!isFinished ? (
+      {showCompleted ? (
+        <>
+          <View style={styles.completeCard}>
+            <View style={styles.completeWrap}>
+              <Text style={styles.earnedBig}>Score: {displayScore}</Text>
+              <Text style={styles.completeSub}>
+                {answeredCount} of {questions.length || answeredCount || 6} answered ·
+                one sprint per day. Come back tomorrow for the next set.
+              </Text>
+              {scheduleDate ? (
+                <Text style={styles.scheduleLine}>DB schedule · {scheduleDate}</Text>
+              ) : null}
+
+              <TouchableOpacity style={styles.replayBtn} onPress={handleReplay}>
+                <Text style={styles.replayBtnText}>Replay sprint</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.navigate('/')} style={styles.doneBtn}>
+                <Text style={styles.doneBtnText}>Back to Home</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <AnswerReviewList questions={questions} answers={displayAnswers} />
+        </>
+      ) : !running ? (
+        <View style={styles.startCard}>
+          <Text style={styles.startTitle}>Quick Sprint</Text>
+          <Text style={styles.startMeta}>
+            {sprintMinutes}-minute timer · {questions.length || 0} questions · one pass
+          </Text>
+          {scheduleDate ? (
+            <Text style={styles.scheduleLine}>DB schedule date · {scheduleDate}</Text>
+          ) : null}
+          {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
+          <TouchableOpacity
+            style={[styles.startBtn, questions.length === 0 && styles.startBtnDisabled]}
+            onPress={handleStart}
+            disabled={questions.length === 0}
+          >
+            <Text style={styles.startBtnText}>Start sprint →</Text>
+          </TouchableOpacity>
+        </View>
+      ) : currentQ ? (
         <View style={styles.quizCard}>
           <View style={styles.qtop}>
-            <Text style={styles.qcount}>{idx + 1}/{activeQuestions.length}</Text>
-            <ProgressTrack progress={(idx + 1) / activeQuestions.length} />
+            <Text style={styles.qcount}>
+              {idx + 1}/{questions.length}
+            </Text>
+            <ProgressTrack progress={(idx + 1) / Math.max(questions.length, 1)} />
             <CountdownTimer totalSeconds={totalSeconds} />
           </View>
 
-          <Text style={[styles.qtag, { 
-            color: currentQ.subject === 'verbal' ? theme.colors.amber : 
-                   currentQ.subject === 'quantitative' ? theme.colors.blue : 
-                   currentQ.subject === 'analytical' ? theme.colors.purple : theme.colors.teal 
-          }]}>
-            {currentQ.tag}
-          </Text>
-          
+          <View style={styles.scoreRow}>
+            <Text style={styles.qscore}>Score {score}</Text>
+            <Text style={styles.qcombo}>Combo ×{combo}</Text>
+          </View>
+
+          {currentQ.tag ? <Text style={styles.qtag}>{currentQ.tag}</Text> : null}
           <Text style={styles.qtext}>{currentQ.text}</Text>
 
           <View style={styles.optsGrid}>
             {currentQ.opts.map((opt, i) => (
-              <QuizOption 
-                key={i} 
-                label={opt} 
-                state={getOptionState(i)} 
-                onPress={() => selectAnswer(i)} 
-                disabled={answered} 
+              <QuizOption
+                key={`${currentQ.id}-${i}`}
+                label={opt}
+                state={getOptionState(i)}
+                onPress={() => selectAnswer(i)}
+                disabled={answered}
               />
             ))}
           </View>
-
-          <SubjectPills subjects={['verbal', 'quantitative', 'analytical', 'gk']} activeSubject={currentQ.subject} />
         </View>
       ) : (
-        <View style={styles.completeCard}>
-          <View style={styles.completeWrap}>
-            <View style={styles.completeIcon}><Text style={styles.completeIconText}>⚡</Text></View>
-            <Text style={styles.completeTitle}>Sprint complete!</Text>
-            <Text style={styles.completeSub}>{activeQuestions.length}/{activeQuestions.length} answered across Verbal, Quant, Analytical & GK.</Text>
-            
-            <View style={styles.completeStats}>
-              <View style={styles.cstat}>
-                <Text style={styles.cv}>{correctCount}/{activeQuestions.length}</Text>
-                <Text style={styles.ck}>CORRECT</Text>
-              </View>
-              <View style={styles.cstat}>
-                <Text style={styles.cv}>+{correctCount * basePoints}</Text>
-                <Text style={styles.ck}>RDM EARNED</Text>
-              </View>
-              <View style={styles.cstat}>
-                <Text style={styles.cv}>{Math.floor(totalSeconds / 60)}:{totalSeconds % 60 < 10 ? '0' : ''}{totalSeconds % 60}</Text>
-                <Text style={styles.ck}>TIME LEFT</Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity onPress={() => router.navigate('/')} style={styles.doneBtn}>
-              <Text style={styles.doneBtnText}>Back to Home</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.startCard}>
+          <Text style={styles.errorText}>
+            {loadError || 'No questions available to start.'}
+          </Text>
         </View>
       )}
-      
+
       <View style={{ height: 30 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bg,
+  container: { flex: 1, backgroundColor: theme.colors.bg },
+  centered: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: theme.colors.textDim,
+    fontFamily: theme.fonts.body,
   },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 26,
-  },
-  eyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.amber,
-  },
+  contentContainer: { padding: 16, paddingBottom: 26 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.amber },
   eyebrowText: {
     fontSize: 10.5,
     fontWeight: '800',
@@ -217,6 +334,59 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontFamily: theme.fonts.body,
   },
+  startCard: {
+    backgroundColor: theme.colors.card,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 50,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  startTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.colors.text,
+    fontFamily: theme.fonts.heading,
+    textAlign: 'center',
+  },
+  startMeta: {
+    marginTop: 8,
+    fontSize: 13,
+    color: theme.colors.textDim,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
+  },
+  scheduleLine: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.amber,
+    fontFamily: theme.fonts.body,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: theme.colors.pink,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
+  },
+  startBtn: {
+    marginTop: 28,
+    backgroundColor: theme.colors.amber,
+    paddingVertical: 13,
+    paddingHorizontal: 22,
+    borderRadius: 13,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  startBtnDisabled: { opacity: 0.45 },
+  startBtnText: {
+    color: '#3A2404',
+    fontWeight: '800',
+    fontSize: 14,
+    fontFamily: theme.fonts.body,
+  },
   quizCard: {
     backgroundColor: theme.colors.card,
     borderColor: theme.colors.border,
@@ -233,10 +403,21 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 6,
   },
+  scoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
   qscore: {
     fontSize: 12,
     fontWeight: '800',
     color: theme.colors.amber,
+    fontFamily: theme.fonts.body,
+  },
+  qcombo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.teal,
     fontFamily: theme.fonts.body,
   },
   qcount: {
@@ -245,10 +426,6 @@ const styles = StyleSheet.create({
     color: theme.colors.textFaint,
     fontFamily: theme.fonts.body,
   },
-  trackWrapper: {
-    marginBottom: 18,
-    flexDirection: 'row', // to make ProgressTrack take full width
-  },
   qtag: {
     fontSize: 10,
     fontWeight: '800',
@@ -256,12 +433,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
     marginBottom: 8,
+    color: theme.colors.amber,
     fontFamily: theme.fonts.body,
   },
   qtext: {
     fontSize: 15.5,
     fontWeight: '700',
-    lineHeight: 21.7, // 15.5 * 1.4
+    lineHeight: 21.7,
     textAlign: 'center',
     marginBottom: 18,
     paddingHorizontal: 4,
@@ -271,11 +449,7 @@ const styles = StyleSheet.create({
   optsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -5, // offset padding
-  },
-  optCell: {
-    width: '50%',
-    paddingHorizontal: 5,
+    marginHorizontal: -5,
   },
   completeCard: {
     backgroundColor: theme.colors.card,
@@ -286,72 +460,47 @@ const styles = StyleSheet.create({
   },
   completeWrap: {
     alignItems: 'center',
-    paddingTop: 26,
+    paddingTop: 22,
     paddingHorizontal: 8,
     paddingBottom: 8,
   },
-  completeIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.colors.amberSoft,
-    borderColor: 'rgba(239,159,39,0.35)',
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  completeIconText: {
+  earnedBig: {
     fontSize: 28,
-  },
-  completeTitle: {
-    fontSize: 18,
     fontWeight: '800',
+    color: theme.colors.teal,
     fontFamily: theme.fonts.heading,
-    color: theme.colors.text,
+    textAlign: 'center',
   },
   completeSub: {
     fontSize: 12,
     color: theme.colors.textDim,
     marginTop: 6,
-    marginBottom: 18,
     textAlign: 'center',
+    lineHeight: 18,
     fontFamily: theme.fonts.body,
   },
-  completeStats: {
-    flexDirection: 'row',
-    gap: 9,
-    marginBottom: 20,
+  replayBtn: {
     width: '100%',
-  },
-  cstat: {
-    flex: 1,
-    backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
-    borderWidth: 1,
+    marginTop: 16,
+    padding: 13,
     borderRadius: 13,
-    paddingVertical: 11,
-    paddingHorizontal: 6,
+    backgroundColor: theme.colors.cardHi,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     alignItems: 'center',
   },
-  cv: {
-    fontFamily: theme.fonts.heading,
-    fontWeight: '800',
-    fontSize: 15,
+  replayBtnText: {
     color: theme.colors.text,
-  },
-  ck: {
-    fontSize: 8.5,
-    color: theme.colors.textFaint,
-    textTransform: 'uppercase',
-    marginTop: 2,
+    fontWeight: '800',
+    fontSize: 13.5,
     fontFamily: theme.fonts.body,
   },
   doneBtn: {
     width: '100%',
+    marginTop: 10,
     padding: 13,
     borderRadius: 13,
-    backgroundColor: theme.colors.amber, // solid fallback
+    backgroundColor: theme.colors.amber,
     alignItems: 'center',
   },
   doneBtnText: {
@@ -359,5 +508,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 13.5,
     fontFamily: theme.fonts.body,
-  }
+  },
 });

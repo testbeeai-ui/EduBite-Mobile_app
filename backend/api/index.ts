@@ -1,8 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://bytsiknhtcnlxwzgqkrd.supabase.co';
-export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5dHNpa25odGNubHh3emdxa3JkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODg3MjksImV4cCI6MjA4OTc2NDcyOX0.5ORuXxKgyS75KKHEyrs8TPmXIJVOfbsPdkJg7oaBCmA';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    'Missing SUPABASE_URL / SUPABASE_ANON_KEY (or EXPO_PUBLIC_* equivalents). Do not hardcode keys.',
+  );
+}
+
+export { SUPABASE_URL, SUPABASE_ANON_KEY };
+
+/** Shared typed client — anon key only. Never embed service_role here. */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Master Database Type Definitions
@@ -29,7 +39,8 @@ export interface ContentQuestion {
   domain: 'dailydose' | 'funbrain' | string;
   q: string;
   opts: string[];
-  correct: number;
+  /** Server-only for learners; prefer edubite_save_game_state RPC for grading. */
+  correct?: number;
   tag?: string;
   active_date?: string;
   class_level?: string;

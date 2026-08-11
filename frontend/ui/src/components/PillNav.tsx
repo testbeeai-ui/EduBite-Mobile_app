@@ -15,6 +15,7 @@ const pills: Pill[] = [
   { key: 'puzzles', label: '🧩 Puzzles' },
   { key: 'wasquad', label: '💬 WA Squad' },
   { key: 'habits', label: '🌱 Habits' },
+  { key: 'inspiration', label: '🌟 Inspiration' },
   { key: 'achievements', label: '🏆 Achievements' },
   { key: 'ai_integrity', label: '🤖 AI' },
   { key: 'profile', label: '👤 Profile' },

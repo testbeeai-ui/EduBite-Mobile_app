@@ -1,18 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { theme } from '@edubite/ui';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEdubiteData } from '../../hooks/useEdubiteData';
+import { useGame } from '../../lib/game/GameProvider';
+import { openHttpsUrl } from '../../lib/safe-link';
 
 export default function WASquadScreen() {
-  const { gameState } = useEdubiteData();
+  const { state } = useGame();
+  const streak = state.streak ?? 0;
 
   const handleJoinPress = () => {
-    // TODO: Read-only mode - external squad joining navigation
-    console.log('TODO: Read-only mode - WhatsApp join pressed');
-    Linking.openURL('https://chat.whatsapp.com/KRGYkPhUWSRF89Ghp04iCb').catch((err) =>
-      console.error("Failed to open WhatsApp Link", err)
-    );
+    void openHttpsUrl('https://chat.whatsapp.com/KRGYkPhUWSRF89Ghp04iCb');
   };
 
   return (
@@ -35,7 +33,9 @@ export default function WASquadScreen() {
       <View style={styles.jackpotCard}>
         <Text style={styles.jackpotLabel}>THIS WEEK'S CHALLENGE JACKPOT</Text>
         <Text style={styles.jackpotAmount}>₹10,000</Text>
-        <Text style={styles.jackpotSubtext}>Top streak in the group wins the pot Sunday 9PM</Text>
+        <Text style={styles.jackpotSubtext}>
+          Top streak in the group wins the pot Sunday 9PM · your streak: {streak}
+        </Text>
       </View>
 
       {/* Benefits Card */}
