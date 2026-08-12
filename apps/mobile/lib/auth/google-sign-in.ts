@@ -1,134 +1,146 @@
-import * as WebBrowser from 'expo-web-browser';
+import {
+  GoogleSignin,
+  isCancelledResponse,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import type { Session } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import { supabase } from '../supabase';
-import { getMobileAuthRedirectUri } from './redirect';
-import { isEdublastWebAuthDeadEnd } from './redirect-guards';
-import { createSessionFromCallbackUrl } from './session-from-url';
+import {
+  getGoogleWebClientId,
+  mapGoogleIdTokenSignIn,
+  type GoogleIdTokenSignInResult,
+} from './google-id-token-result';
+import { isRunningInExpoGo } from './runtime';
 
-WebBrowser.maybeCompleteAuthSession();
+export type GoogleSignInResult = GoogleIdTokenSignInResult;
 
-/** True while openAuthSessionAsync owns the PKCE exchange (Linking should not race). */
-let oauthBrowserInFlight = false;
+let configured = false;
 
-export function isOAuthBrowserInFlight(): boolean {
-  return oauthBrowserInFlight;
+function ensureGoogleConfigured(): string {
+  const webClientId = getGoogleWebClientId();
+  if (!webClientId) {
+    throw new Error(
+      'Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID. Use the Google Cloud Web application Client ID.',
+    );
+  }
+  if (!configured) {
+    GoogleSignin.configure({ webClientId });
+    configured = true;
+    console.info('[auth] GoogleSignin configured', {
+      webClientIdSuffix: webClientId.slice(-24),
+    });
+  }
+  return webClientId;
 }
 
-export type GoogleSignInResult =
-  | { ok: true; session: Session }
-  | { ok: false; cancelled?: boolean; error: string };
-
 /**
- * Official Expo + Supabase Google OAuth (PKCE):
- * 1. signInWithOAuth(..., skipBrowserRedirect: true)
- * 2. openAuthSessionAsync with mobile redirect URI
- * 3. exchangeCodeForSession on success callback
+ * Native Google Sign-In → Supabase session via ID token.
+ * Requires a development / production build (not Expo Go).
  *
- * Web Edubite continues to use its own Next.js / cookie OAuth path — this module
- * is mobile-only (native + Expo web shell uses the same deep-link redirect).
+ * Note: @react-native-google-signin/google-signin Original API does not
+ * attach a custom nonce. Enable Supabase Google → "Skip nonce check" until
+ * a nonce-capable native path is used.
  */
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
-  const redirectTo = getMobileAuthRedirectUri();
-  console.info('[auth] starting Google OAuth', {
-    platform: Platform.OS,
-    redirectTo,
-  });
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo,
-      skipBrowserRedirect: true,
-    },
-  });
-
-  if (error) {
-    console.warn('[auth] signInWithOAuth failed', error.message);
-    return { ok: false, error: error.message };
-  }
-  if (!data?.url) {
+  if (isRunningInExpoGo()) {
     return {
       ok: false,
-      error: 'Supabase did not return an OAuth URL. Check Google provider config.',
+      error:
+        'Google Sign-In needs a development build (Expo Go cannot load native Google Sign-In). Run the Android dev client, then try again.',
     };
   }
 
+  console.info('[auth] starting native Google Sign-In', { platform: Platform.OS });
+
   try {
-    const oauthUrl = new URL(data.url);
-    const redirectParam =
-      oauthUrl.searchParams.get('redirect_to') ??
-      oauthUrl.searchParams.get('redirectTo');
-    console.info('[auth] oauth authorize url (sanitized)', {
-      host: oauthUrl.host,
-      path: oauthUrl.pathname,
-      redirect_to: redirectParam,
-    });
-    if (
-      redirectParam &&
-      !redirectParam.startsWith('edubite://') &&
-      !redirectParam.startsWith('exp://') &&
-      !redirectParam.startsWith('exps://')
-    ) {
-      console.warn(
-        '[auth] unexpected redirect_to — add it under Supabase Redirect URLs or login falls back to Site URL.',
-        redirectParam,
-      );
+    ensureGoogleConfigured();
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+    const response = await GoogleSignin.signIn();
+
+    if (isCancelledResponse(response)) {
+      return mapGoogleIdTokenSignIn({ cancelled: true });
     }
-  } catch {
-    console.warn('[auth] could not parse OAuth URL for logging');
-  }
-
-  console.info('[auth] opening system auth session', { redirectTo });
-  oauthBrowserInFlight = true;
-  try {
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
-      preferEphemeralSession: true,
-      showInRecents: false,
-    });
-    console.info('[auth] auth-session result', {
-      type: result.type,
-      hasUrl: result.type === 'success' && 'url' in result && Boolean(result.url),
-    });
-
-    if (result.type === 'cancel' || result.type === 'dismiss') {
+    if (!isSuccessResponse(response)) {
       return {
         ok: false,
-        cancelled: true,
-        error:
-          'Sign-in closed before the app captured the callback. Try again and do not close the browser early.',
-      };
-    }
-    if (result.type !== 'success' || !('url' in result) || !result.url) {
-      return {
-        ok: false,
-        error: `Unexpected auth session result: ${result.type}`,
+        error: 'Google Sign-In did not complete. Try again.',
       };
     }
 
-    if (isEdublastWebAuthDeadEnd(result.url)) {
-      console.warn('[auth] landed on Edublast web dead-end without code', {
-        host: 'edublast.in',
+    const idToken = response.data.idToken;
+    if (!idToken) {
+      return mapGoogleIdTokenSignIn({ idToken: null });
+    }
+
+    console.info('[auth] Google idToken obtained');
+    const supabaseResult = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+
+    const mapped = mapGoogleIdTokenSignIn({
+      idToken,
+      supabase: {
+        data: { session: supabaseResult.data.session },
+        error: supabaseResult.error
+          ? { message: supabaseResult.error.message }
+          : null,
+      },
+    });
+
+    if (mapped.ok) {
+      console.info('[auth] session created', {
+        userId: mapped.session.user.id,
+        provider: mapped.session.user.app_metadata?.provider ?? 'google',
       });
-      return {
-        ok: false,
-        error:
-          'Google finished on Edublast web instead of returning a login code to the app. Ensure Supabase Site URL is https://www.edublast.in and try again.',
-      };
+    } else {
+      console.warn('[auth] signInWithIdToken failed', mapped.error);
     }
-
-    return createSessionFromCallbackUrl(result.url);
-  } finally {
-    oauthBrowserInFlight = false;
+    return mapped;
+  } catch (error: unknown) {
+    if (isErrorWithCode(error) && error.code === statusCodes.SIGN_IN_CANCELLED) {
+      return mapGoogleIdTokenSignIn({ cancelled: true });
+    }
+    if (isErrorWithCode(error) && error.code === statusCodes.IN_PROGRESS) {
+      return { ok: false, error: 'Google Sign-In already in progress.' };
+    }
+    if (
+      isErrorWithCode(error) &&
+      error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+    ) {
+      return { ok: false, error: 'Google Play Services is unavailable or outdated.' };
+    }
+    const message =
+      error instanceof Error ? error.message : 'Google Sign-In failed.';
+    console.warn('[auth] native Google Sign-In error', message);
+    return mapGoogleIdTokenSignIn({ nativeErrorMessage: message });
   }
 }
 
 export async function signOut(): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const current = GoogleSignin.getCurrentUser();
+    if (current) {
+      await GoogleSignin.signOut();
+    }
+  } catch (error: unknown) {
+    console.warn(
+      '[auth] GoogleSignin.signOut warning',
+      error instanceof Error ? error.message : error,
+    );
+  }
+
   const { error } = await supabase.auth.signOut();
   if (error) {
-    console.warn('[auth] signOut failed', error.message);
+    console.warn('[auth] supabase signOut failed', error.message);
     return { ok: false, error: error.message };
   }
   console.info('[auth] signed out');
   return { ok: true };
 }
+
+export type { Session };

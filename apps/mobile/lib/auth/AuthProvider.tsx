@@ -7,19 +7,15 @@ import React, {
   useState,
 } from 'react';
 import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import {
-  isOAuthBrowserInFlight,
-  signInWithGoogle,
+  signInWithGoogle as nativeSignInWithGoogle,
   signOut as authSignOut,
 } from './google-sign-in';
 import { createSessionFromCallbackUrl } from './session-from-url';
 import { MOBILE_AUTH_CALLBACK_PATH, MOBILE_AUTH_SCHEME } from './redirect';
 import { isAnonymousUser, isAuthenticatedLearner } from './user-kind';
-
-WebBrowser.maybeCompleteAuthSession();
 
 type AuthContextValue = {
   loading: boolean;
@@ -43,10 +39,7 @@ function isAuthCallbackUrl(url: string): boolean {
   const pathHit =
     lower.includes(`/${MOBILE_AUTH_CALLBACK_PATH}`) ||
     lower.includes(`--/${MOBILE_AUTH_CALLBACK_PATH}`);
-  return (
-    (schemeHit || lower.startsWith('exp://') || lower.startsWith('exps://')) &&
-    pathHit
-  );
+  return schemeHit && pathHit;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -91,10 +84,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleIncomingUrl = useCallback(
     async (url: string | null) => {
       if (!url || !isAuthCallbackUrl(url)) return;
-      if (isOAuthBrowserInFlight()) {
-        console.info('[auth] deep link ignored — browser OAuth in flight');
-        return;
-      }
       console.info('[auth] deep link callback received');
       const result = await createSessionFromCallbackUrl(url);
       if (!result.ok) {
@@ -121,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError(null);
     setLoading(true);
     try {
-      const result = await signInWithGoogle();
+      const result = await nativeSignInWithGoogle();
       if (!result.ok) {
         if (!result.cancelled) setAuthError(result.error);
         return false;

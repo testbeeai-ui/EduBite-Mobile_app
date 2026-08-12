@@ -8,8 +8,8 @@ import { createSessionFromCallbackUrl } from '../../lib/auth/session-from-url';
 
 /**
  * Deep-link landing route for `edubite://auth/callback`.
- * Primary exchange usually happens inside openAuthSessionAsync;
- * this screen covers cold-start opens and is idempotent if session already exists.
+ * Primary login is native Google ID-token; this screen covers rare cold-start
+ * deep links and is idempotent if a session already exists.
  */
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function AuthCallbackScreen() {
         (url.includes('code=') || url.includes('error=') || url.includes('access_token='));
 
       if (!hasCode) {
-        // Wait briefly for AuthProvider Linking handler / openAuthSessionAsync.
+        // Wait briefly for AuthProvider Linking handler / session settle.
         await new Promise((r) => setTimeout(r, 600));
         const again = await supabase.auth.getSession();
         if (!cancelled) {

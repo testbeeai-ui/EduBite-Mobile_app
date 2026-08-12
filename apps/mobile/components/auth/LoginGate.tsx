@@ -34,8 +34,8 @@ export function LoginGate() {
         </Text>
         <Text style={styles.title}>Sign in to continue</Text>
         <Text style={styles.sub}>
-          Use Google — same account as Edubite web. Stay in the browser until it
-          returns to the app by itself (do not tap around on edublast.in).
+          Use Google — same account as Edubite web. Opens the native Google
+          account picker (requires the Edubite development build, not Expo Go).
         </Text>
 
         {authError ? (

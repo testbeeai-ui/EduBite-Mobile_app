@@ -49,7 +49,14 @@
       "expo-router",
       "expo-secure-store",
       "expo-web-browser",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-dev-client",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.edubite-pending-ios-client"
+        }
+      ]
     ]
   }
 }

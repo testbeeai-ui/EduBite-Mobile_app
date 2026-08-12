@@ -55,8 +55,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: ExpoSecureStoreAdapter,
     persistSession: true,
     autoRefreshToken: true,
-    // Native: handle code exchange manually after openAuthSessionAsync.
-    // Web Expo shell can detect URL; RN must keep this false.
+    // Native Google login uses signInWithIdToken (no URL session detect).
+    // Keep detectSessionInUrl false on RN; web Expo shell may use URL.
     detectSessionInUrl: Platform.OS === 'web',
     flowType: 'pkce',
   },
