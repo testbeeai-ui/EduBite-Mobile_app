@@ -51,12 +51,12 @@ EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=167530443868-kniil90rorooo9i3vu80sqmtlo3sqqi2.a
 
 ## Development build (required)
 
-Expo Go cannot load this native module.
+Expo Go cannot load this native module. Project: [@edublast/edubite-mobile](https://expo.dev/accounts/edublast/projects/edubite-mobile).
 
 ```bash
 cd apps/mobile
-npx eas build --profile development --platform android
-# install the APK, then:
+npx eas-cli build --profile development --platform android
+# install the APK, then open Edubite (not Expo Go):
 npm run start --workspace=mobile
 ```
 
@@ -68,3 +68,10 @@ npx expo run:android
 ```
 
 When signing in you should see Metro logs: `Google idToken obtained` → `session created` — with **no** navigation to `edublast.in`.
+
+## Security notes
+
+- Never put Google Client Secret in the app.
+- Keep Supabase **Authorized Client IDs** limited to Web + this app’s Android (and iOS when ready) clients.
+- **Skip nonce check** is required for the current RN Google Sign-In Original API; treat ID-token leakage as high risk until a nonce-capable path lands.
+- Learner gate requires `app_metadata` Google provider (not email/anonymous).

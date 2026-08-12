@@ -12,6 +12,10 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
+const SECURE_STORE_OPTS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+};
+
 const ExpoSecureStoreAdapter = {
   getItem: (key: string) => {
     if (Platform.OS === 'web') {
@@ -23,7 +27,7 @@ const ExpoSecureStoreAdapter = {
         return Promise.resolve(null);
       }
     }
-    return SecureStore.getItemAsync(key);
+    return SecureStore.getItemAsync(key, SECURE_STORE_OPTS);
   },
   setItem: (key: string, value: string) => {
     if (Platform.OS === 'web') {
@@ -34,7 +38,7 @@ const ExpoSecureStoreAdapter = {
       }
       return Promise.resolve();
     }
-    return SecureStore.setItemAsync(key, value);
+    return SecureStore.setItemAsync(key, value, SECURE_STORE_OPTS);
   },
   removeItem: (key: string) => {
     if (Platform.OS === 'web') {
@@ -45,7 +49,7 @@ const ExpoSecureStoreAdapter = {
       }
       return Promise.resolve();
     }
-    return SecureStore.deleteItemAsync(key);
+    return SecureStore.deleteItemAsync(key, SECURE_STORE_OPTS);
   },
 };
 

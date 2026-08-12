@@ -41,4 +41,14 @@ describe('user-kind', () => {
     assert.equal(isAnonymousUser(google), false);
     assert.equal(isAuthenticatedLearner(google), true);
   });
+
+  it('rejects non-Google non-anonymous users', () => {
+    const emailOnly = user({
+      is_anonymous: false,
+      app_metadata: { provider: 'email', providers: ['email'] },
+      email: 'a@b.com',
+    });
+    assert.equal(isAuthenticatedLearner(emailOnly), false);
+  });
 });
+

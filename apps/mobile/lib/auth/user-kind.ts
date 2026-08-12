@@ -9,7 +9,14 @@ export function isAnonymousUser(user: User | null | undefined): boolean {
   return user.app_metadata?.provider === 'anonymous';
 }
 
-/** Real learner login (Google / email / etc.) — required to use the app. */
+function hasGoogleProvider(user: User): boolean {
+  if (user.app_metadata?.provider === 'google') return true;
+  const providers = user.app_metadata?.providers;
+  return Array.isArray(providers) && providers.includes('google');
+}
+
+/** Google learner session required to use the app (not email/anonymous). */
 export function isAuthenticatedLearner(user: User | null | undefined): boolean {
-  return Boolean(user) && !isAnonymousUser(user);
+  if (!user || isAnonymousUser(user)) return false;
+  return hasGoogleProvider(user);
 }

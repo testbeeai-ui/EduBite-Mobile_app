@@ -1,10 +1,3 @@
-import {
-  GoogleSignin,
-  isCancelledResponse,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
 import type { Session } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import { supabase } from '../supabase';
@@ -17,9 +10,25 @@ import { isRunningInExpoGo } from './runtime';
 
 export type GoogleSignInResult = GoogleIdTokenSignInResult;
 
-let configured = false;
+type GoogleSignInNative = typeof import('@react-native-google-signin/google-signin');
 
-function ensureGoogleConfigured(): string {
+let configured = false;
+let nativeModule: GoogleSignInNative | null = null;
+
+/**
+ * Lazy-load native Google Sign-In.
+ * Top-level import crashes Expo Go (RNGoogleSignin TurboModule missing).
+ * Documented exception to "no inline imports" for native-binary gating.
+ */
+function loadGoogleSignInNative(): GoogleSignInNative {
+  if (!nativeModule) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Expo Go cannot resolve this native module at startup
+    nativeModule = require('@react-native-google-signin/google-signin') as GoogleSignInNative;
+  }
+  return nativeModule;
+}
+
+function ensureGoogleConfigured(GoogleSignin: GoogleSignInNative['GoogleSignin']): string {
   const webClientId = getGoogleWebClientId();
   if (!webClientId) {
     throw new Error(
@@ -36,6 +45,9 @@ function ensureGoogleConfigured(): string {
   return webClientId;
 }
 
+const DEV_BUILD_REQUIRED_MESSAGE =
+  'Google Sign-In needs a development build (Expo Go cannot load native Google Sign-In). Run: cd apps/mobile && npx eas build --profile development --platform android — then open that app, not Expo Go.';
+
 /**
  * Native Google Sign-In → Supabase session via ID token.
  * Requires a development / production build (not Expo Go).
@@ -46,17 +58,22 @@ function ensureGoogleConfigured(): string {
  */
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   if (isRunningInExpoGo()) {
-    return {
-      ok: false,
-      error:
-        'Google Sign-In needs a development build (Expo Go cannot load native Google Sign-In). Run the Android dev client, then try again.',
-    };
+    console.warn('[auth] blocked — Expo Go has no RNGoogleSignin native module');
+    return { ok: false, error: DEV_BUILD_REQUIRED_MESSAGE };
   }
 
   console.info('[auth] starting native Google Sign-In', { platform: Platform.OS });
 
   try {
-    ensureGoogleConfigured();
+    const {
+      GoogleSignin,
+      isCancelledResponse,
+      isErrorWithCode,
+      isSuccessResponse,
+      statusCodes,
+    } = loadGoogleSignInNative();
+
+    ensureGoogleConfigured(GoogleSignin);
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
     const response = await GoogleSignin.signIn();
@@ -102,36 +119,52 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     }
     return mapped;
   } catch (error: unknown) {
-    if (isErrorWithCode(error) && error.code === statusCodes.SIGN_IN_CANCELLED) {
-      return mapGoogleIdTokenSignIn({ cancelled: true });
-    }
-    if (isErrorWithCode(error) && error.code === statusCodes.IN_PROGRESS) {
-      return { ok: false, error: 'Google Sign-In already in progress.' };
-    }
-    if (
-      isErrorWithCode(error) &&
-      error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
-    ) {
-      return { ok: false, error: 'Google Play Services is unavailable or outdated.' };
-    }
     const message =
       error instanceof Error ? error.message : 'Google Sign-In failed.';
+    if (message.includes('RNGoogleSignin') || message.includes('TurboModuleRegistry')) {
+      return { ok: false, error: DEV_BUILD_REQUIRED_MESSAGE };
+    }
+
+    try {
+      const { isErrorWithCode, statusCodes } = loadGoogleSignInNative();
+      if (isErrorWithCode(error) && error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return mapGoogleIdTokenSignIn({ cancelled: true });
+      }
+      if (isErrorWithCode(error) && error.code === statusCodes.IN_PROGRESS) {
+        return { ok: false, error: 'Google Sign-In already in progress.' };
+      }
+      if (
+        isErrorWithCode(error) &&
+        error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+      ) {
+        return {
+          ok: false,
+          error: 'Google Play Services is unavailable or outdated.',
+        };
+      }
+    } catch {
+      /* native module unavailable */
+    }
+
     console.warn('[auth] native Google Sign-In error', message);
     return mapGoogleIdTokenSignIn({ nativeErrorMessage: message });
   }
 }
 
 export async function signOut(): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const current = GoogleSignin.getCurrentUser();
-    if (current) {
-      await GoogleSignin.signOut();
+  if (!isRunningInExpoGo()) {
+    try {
+      const { GoogleSignin } = loadGoogleSignInNative();
+      const current = GoogleSignin.getCurrentUser();
+      if (current) {
+        await GoogleSignin.signOut();
+      }
+    } catch (error: unknown) {
+      console.warn(
+        '[auth] GoogleSignin.signOut warning',
+        error instanceof Error ? error.message : error,
+      );
     }
-  } catch (error: unknown) {
-    console.warn(
-      '[auth] GoogleSignin.signOut warning',
-      error instanceof Error ? error.message : error,
-    );
   }
 
   const { error } = await supabase.auth.signOut();
