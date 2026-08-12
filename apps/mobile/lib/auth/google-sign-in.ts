@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import { supabase } from '../supabase';
 import { getMobileAuthRedirectUri } from './redirect';
+import { isEdublastWebAuthDeadEnd } from './redirect-guards';
 import { createSessionFromCallbackUrl } from './session-from-url';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -81,22 +82,38 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   console.info('[auth] opening system auth session', { redirectTo });
   oauthBrowserInFlight = true;
   try {
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-    console.info('[auth] auth-session result', { type: result.type });
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
+      preferEphemeralSession: true,
+      showInRecents: false,
+    });
+    console.info('[auth] auth-session result', {
+      type: result.type,
+      hasUrl: result.type === 'success' && 'url' in result && Boolean(result.url),
+    });
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
       return {
         ok: false,
         cancelled: true,
         error:
-          'Sign-in closed before returning to the app. In Expo Go, Supabase Redirect URLs must include this exact redirect (or exp://**/--/auth/callback): ' +
-          redirectTo,
+          'Sign-in closed before the app captured the callback. Try again and do not close the browser early.',
       };
     }
     if (result.type !== 'success' || !('url' in result) || !result.url) {
       return {
         ok: false,
         error: `Unexpected auth session result: ${result.type}`,
+      };
+    }
+
+    if (isEdublastWebAuthDeadEnd(result.url)) {
+      console.warn('[auth] landed on Edublast web dead-end without code', {
+        host: 'edublast.in',
+      });
+      return {
+        ok: false,
+        error:
+          'Google finished on Edublast web instead of returning a login code to the app. Ensure Supabase Site URL is https://www.edublast.in and try again.',
       };
     }
 

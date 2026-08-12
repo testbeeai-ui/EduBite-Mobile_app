@@ -41,7 +41,7 @@
     "android": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --android",
     "ios": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --ios",
     "web": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --web",
-    "test": "node --import tsx --test lib/auth/oauth-params.test.ts lib/auth/user-kind.test.ts",
+    "test": "node --import tsx --test lib/auth/oauth-params.test.ts lib/auth/user-kind.test.ts lib/auth/redirect.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "private": true
