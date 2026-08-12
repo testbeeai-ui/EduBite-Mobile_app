@@ -1,8 +1,8 @@
 import { Vibration } from 'react-native';
 
-function buzz(ms: number) {
+function buzz(pattern: number | number[]) {
   try {
-    Vibration.vibrate(ms);
+    Vibration.vibrate(pattern);
   } catch {
     /* web / unsupported */
   }

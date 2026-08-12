@@ -48,13 +48,16 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Anon key only — never use service_role in the mobile app.
+// Anon / publishable key only — never embed service_role or Google client secret.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: ExpoSecureStoreAdapter,
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    // Native: handle code exchange manually after openAuthSessionAsync.
+    // Web Expo shell can detect URL; RN must keep this false.
+    detectSessionInUrl: Platform.OS === 'web',
+    flowType: 'pkce',
   },
 });
 

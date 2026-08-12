@@ -2,8 +2,8 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 
 /**
- * Silent device session — no login UI.
- * Uses anonymous auth when available; otherwise reuses any persisted session.
+ * Ensure a Supabase session for progress writes.
+ * Prefer an existing Google (or other) session; only then try anonymous.
  */
 export async function ensureSilentSession(): Promise<{
   user: User | null;
@@ -20,7 +20,7 @@ export async function ensureSilentSession(): Promise<{
   const { data, error } = await supabase.auth.signInAnonymously();
   if (error) {
     console.warn(
-      '[auth] Anonymous sign-in failed (enable Anonymous in Supabase Auth):',
+      '[auth] No session and anonymous sign-in failed (enable Anonymous or use Google login):',
       error.message,
     );
     return { user: null, session: null };

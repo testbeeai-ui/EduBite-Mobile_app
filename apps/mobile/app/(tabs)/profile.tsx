@@ -3,14 +3,29 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { theme } from '@edubite/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../lib/auth/AuthProvider';
 import { useGame } from '../../lib/game/GameProvider';
 import { isFullDay } from '../../lib/game/state';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { state, level, criteria } = useGame();
+  const {
+    user,
+    isGoogleUser,
+    authError,
+    clearAuthError,
+    loading: authLoading,
+    signInWithGoogle,
+    signOut,
+  } = useAuth();
 
-  const name = level.current.name;
+  const name =
+    (isGoogleUser &&
+      (user?.user_metadata?.full_name ||
+        user?.user_metadata?.name ||
+        user?.email?.split('@')[0])) ||
+    level.current.name;
   const rdm = state.rdm ?? 0;
   const initialLetter = name.charAt(0).toUpperCase();
   const habitsChecked = state.habits.filter((h) => h.done).length;
@@ -50,16 +65,20 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{name}</Text>
+              <Text style={styles.userName}>{String(name)}</Text>
               <Text style={styles.userEmail}>
-                Silent learner session · Class {state.dose.currentClass}
+                {isGoogleUser
+                  ? `${user?.email ?? 'Google account'} · Class ${state.dose.currentClass}`
+                  : `Guest session · Class ${state.dose.currentClass}`}
               </Text>
             </View>
           </View>
 
           <View style={styles.badgeRow}>
             <View style={[styles.ubadge, styles.ubadgeTeal]}>
-              <Text style={[styles.ubadgeText, styles.ubadgeTextTeal]}>✓ Edubite Connected</Text>
+              <Text style={[styles.ubadgeText, styles.ubadgeTextTeal]}>
+                {isGoogleUser ? '✓ Google signed in' : '○ Guest mode'}
+              </Text>
             </View>
             <View style={[styles.ubadge, styles.ubadgePurple]}>
               <Text style={[styles.ubadgeText, styles.ubadgeTextPurple]}>✨ {level.current.name}</Text>
@@ -73,9 +92,51 @@ export default function ProfileScreen() {
 
           <View style={styles.noteBox}>
             <Text style={styles.noteText}>
-              Progress saves automatically via anonymous session — no login page in this app.
+              {isGoogleUser
+                ? 'Progress saves to your Google-linked Supabase account and survives app restarts.'
+                : 'Sign in with Google to sync progress. Guest/anonymous saves need Anonymous auth enabled in Supabase.'}
             </Text>
           </View>
+
+          {authError ? (
+            <TouchableOpacity
+              style={styles.errorBox}
+              onPress={clearAuthError}
+              accessibilityRole="button"
+            >
+              <Text style={styles.errorText}>{authError}</Text>
+              <Text style={styles.errorHint}>Tap to dismiss</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {isGoogleUser ? (
+            <TouchableOpacity
+              style={styles.authBtnSecondary}
+              disabled={authLoading}
+              onPress={() => {
+                void signOut();
+              }}
+            >
+              <Text style={styles.authBtnSecondaryText}>
+                {authLoading ? 'Please wait…' : 'Sign out'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.authBtn}
+              disabled={authLoading}
+              onPress={() => {
+                void (async () => {
+                  const ok = await signInWithGoogle();
+                  if (ok) router.replace('/');
+                })();
+              }}
+            >
+              <Text style={styles.authBtnText}>
+                {authLoading ? 'Opening Google…' : 'Continue with Google'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </LinearGradient>
       </View>
 
@@ -218,6 +279,39 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(55,138,221,0.25)',
   },
   noteText: { fontSize: 11, color: theme.colors.textDim, lineHeight: 16, fontFamily: theme.fonts.body },
+  errorBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(220,60,60,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(220,60,60,0.3)',
+  },
+  errorText: { fontSize: 11.5, color: '#c0392b', fontFamily: theme.fonts.body, lineHeight: 16 },
+  errorHint: { fontSize: 10, color: theme.colors.textFaint, marginTop: 4, fontFamily: theme.fonts.body },
+  authBtn: {
+    marginTop: 12,
+    backgroundColor: theme.colors.purple,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  authBtnText: { color: '#fff', fontWeight: '700', fontSize: 13.5, fontFamily: theme.fonts.body },
+  authBtnSecondary: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.cardHi,
+  },
+  authBtnSecondaryText: {
+    color: theme.colors.text,
+    fontWeight: '700',
+    fontSize: 13.5,
+    fontFamily: theme.fonts.body,
+  },
 
   rdmCard: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 18, padding: 16, marginBottom: 20 },
   rdmTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

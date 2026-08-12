@@ -5,16 +5,20 @@ import { theme } from '../theme';
 export const AppHeader = ({
   onOpenDrawer,
   onOpenNotifications,
+  onLoginPress,
   streak = 0,
   unreadCount = 0,
   showLogin = false,
+  loginLabel = 'Login',
 }: {
   onOpenDrawer?: () => void;
   onOpenNotifications?: () => void;
+  onLoginPress?: () => void;
   streak?: number;
   unreadCount?: number;
-  /** Mobile learner app keeps this off — silent anonymous session. */
+  /** When true, show Google/login CTA instead of Learner chip. */
   showLogin?: boolean;
+  loginLabel?: string;
 }) => {
   return (
     <View style={styles.container}>
@@ -52,13 +56,13 @@ export const AppHeader = ({
             ) : null}
           </TouchableOpacity>
           {showLogin ? (
-            <TouchableOpacity style={styles.loginBtn}>
-              <Text style={styles.loginBtnText}>👤 Login</Text>
+            <TouchableOpacity style={styles.loginBtn} onPress={onLoginPress}>
+              <Text style={styles.loginBtnText}>👤 {loginLabel}</Text>
             </TouchableOpacity>
           ) : (
-            <View style={styles.learnerChip}>
-              <Text style={styles.learnerChipText}>Learner</Text>
-            </View>
+            <TouchableOpacity style={styles.learnerChip} onPress={onLoginPress}>
+              <Text style={styles.learnerChipText}>Account</Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>

@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'reac
 import { Slot, useRouter } from 'expo-router';
 import { AppHeader, PhoneShell, theme } from '@edubite/ui';
 import { NotificationsPanel } from '../components/NotificationsPanel';
+import { AuthProvider, useAuth } from '../lib/auth/AuthProvider';
 import { GameProvider, useGame } from '../lib/game/GameProvider';
 
 const QUICK_LINKS: Array<{ label: string; route: string }> = [
@@ -21,6 +22,7 @@ const QUICK_LINKS: Array<{ label: string; route: string }> = [
 function AppShell() {
   const router = useRouter();
   const { state } = useGame();
+  const { isGoogleUser, loading: authLoading, signInWithGoogle } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
 
@@ -35,12 +37,25 @@ function AppShell() {
     router.navigate(route as never);
   };
 
+  const onLoginPress = async () => {
+    if (isGoogleUser) {
+      go('/profile');
+      return;
+    }
+    const ok = await signInWithGoogle();
+    if (ok) go('/');
+  };
+
   return (
     <PhoneShell>
       <AppHeader
         streak={state.streak}
         unreadCount={unreadCount}
-        showLogin={false}
+        showLogin={!isGoogleUser}
+        loginLabel={authLoading ? '…' : 'Google'}
+        onLoginPress={() => {
+          void onLoginPress();
+        }}
         onOpenDrawer={() => setDrawerOpen(true)}
         onOpenNotifications={() => setNotesOpen(true)}
       />
@@ -82,9 +97,11 @@ function AppShell() {
 
 export default function RootLayout() {
   return (
-    <GameProvider>
-      <AppShell />
-    </GameProvider>
+    <AuthProvider>
+      <GameProvider>
+        <AppShell />
+      </GameProvider>
+    </AuthProvider>
   );
 }
 

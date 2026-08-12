@@ -31,13 +31,16 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "tsx": "^4.23.12",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start",
     "android": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --android",
     "ios": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --ios",
-    "web": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --web"
+    "web": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --web",
+    "test": "node --import tsx --test lib/auth/oauth-params.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "private": true
 }

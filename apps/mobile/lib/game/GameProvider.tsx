@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { ensureSilentSession } from '../brain-gym/silent-auth';
+import { useAuth } from '../auth/AuthProvider';
 import {
   enrollMonthlyChallenge as enrollMonthlyChallengeRpc,
   fetchEdubiteRewards,
@@ -66,6 +67,7 @@ type GameContextValue = {
 const GameContext = createContext<GameContextValue | null>(null);
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [rewardMap, setRewardMap] = useState<RewardMap>({});
@@ -144,7 +146,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refetch();
-  }, [refetch]);
+  }, [refetch, user?.id]);
 
   const completeDose: GameContextValue['completeDose'] = useCallback(
     async ({ classLevel, answers, correct, total }) => {
