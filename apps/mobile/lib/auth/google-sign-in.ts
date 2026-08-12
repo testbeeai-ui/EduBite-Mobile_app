@@ -53,6 +53,26 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     };
   }
 
+  try {
+    const oauthUrl = new URL(data.url);
+    const redirectParam =
+      oauthUrl.searchParams.get('redirect_to') ??
+      oauthUrl.searchParams.get('redirectTo');
+    console.info('[auth] oauth authorize url (sanitized)', {
+      host: oauthUrl.host,
+      path: oauthUrl.pathname,
+      redirect_to: redirectParam,
+    });
+    if (redirectParam && !redirectParam.startsWith('edubite://')) {
+      console.warn(
+        '[auth] redirect_to is not edubite:// — Supabase may send you to Site URL (edublast.in). Add edubite://auth/callback under Redirect URLs.',
+        redirectParam,
+      );
+    }
+  } catch {
+    console.warn('[auth] could not parse OAuth URL for logging');
+  }
+
   console.info('[auth] opening system auth session');
   oauthBrowserInFlight = true;
   try {
