@@ -34,8 +34,10 @@ export function LoginGate() {
         </Text>
         <Text style={styles.title}>Sign in to continue</Text>
         <Text style={styles.sub}>
-          Use Google — same account as the Edubite web app. Guest and anonymous
-          sessions are disabled.
+          Use Google — same account as the Edubite web app. In Expo Go, after Google
+          you must return to the app automatically; if the browser hangs, add
+          exp://**/--/auth/callback in Supabase Redirect URLs (plus your current
+          exp:// IP URL from the Metro log).
         </Text>
 
         {authError ? (

@@ -63,9 +63,14 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
       path: oauthUrl.pathname,
       redirect_to: redirectParam,
     });
-    if (redirectParam && !redirectParam.startsWith('edubite://')) {
+    if (
+      redirectParam &&
+      !redirectParam.startsWith('edubite://') &&
+      !redirectParam.startsWith('exp://') &&
+      !redirectParam.startsWith('exps://')
+    ) {
       console.warn(
-        '[auth] redirect_to is not edubite:// — Supabase may send you to Site URL (edublast.in). Add edubite://auth/callback under Redirect URLs.',
+        '[auth] unexpected redirect_to — add it under Supabase Redirect URLs or login falls back to Site URL.',
         redirectParam,
       );
     }
@@ -73,14 +78,20 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     console.warn('[auth] could not parse OAuth URL for logging');
   }
 
-  console.info('[auth] opening system auth session');
+  console.info('[auth] opening system auth session', { redirectTo });
   oauthBrowserInFlight = true;
   try {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     console.info('[auth] auth-session result', { type: result.type });
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
-      return { ok: false, cancelled: true, error: 'Sign-in cancelled.' };
+      return {
+        ok: false,
+        cancelled: true,
+        error:
+          'Sign-in closed before returning to the app. In Expo Go, Supabase Redirect URLs must include this exact redirect (or exp://**/--/auth/callback): ' +
+          redirectTo,
+      };
     }
     if (result.type !== 'success' || !('url' in result) || !result.url) {
       return {

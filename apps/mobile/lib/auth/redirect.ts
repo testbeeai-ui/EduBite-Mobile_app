@@ -1,3 +1,5 @@
+import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { makeRedirectUri } from 'expo-auth-session';
 
@@ -7,17 +9,26 @@ export const MOBILE_AUTH_SCHEME = 'edubite';
 /** Path segment for OAuth return — final URI: edubite://auth/callback */
 export const MOBILE_AUTH_CALLBACK_PATH = 'auth/callback';
 
-/** Stable redirect — add this exact URI in Supabase Auth → Redirect URLs. */
+/** Stable redirect for dev builds / production APK — NOT used inside Expo Go. */
 export const STABLE_MOBILE_AUTH_REDIRECT = `${MOBILE_AUTH_SCHEME}://${MOBILE_AUTH_CALLBACK_PATH}`;
 
+export function isRunningInExpoGo(): boolean {
+  return Constants.appOwnership === 'expo';
+}
+
 /**
- * Mobile redirect URI passed to Supabase `signInWithOAuth({ redirectTo })`.
+ * Mobile redirect URI for Supabase `signInWithOAuth({ redirectTo })`.
  *
- * Always use the stable custom scheme on native so Supabase does not fall back
- * to Site URL (www.edublast.in) when the Expo Go LAN IP changes.
+ * - Expo Go: MUST use `exp://…/--/auth/callback` so the auth browser can return
+ *   into Expo Go. Custom `edubite://` is NOT owned by Expo Go → session hangs.
+ * - Dev build / store build: use `edubite://auth/callback`.
  *
- * Google Cloud authorized redirect stays on Supabase:
- * `https://<project-ref>.supabase.co/auth/v1/callback`
+ * Supabase Redirect URLs should include BOTH:
+ *   - edubite://auth/callback
+ *   - exp://**/--/auth/callback   (wildcard — LAN IP changes every network)
+ *
+ * Google Cloud redirect stays:
+ *   https://<project-ref>.supabase.co/auth/v1/callback
  */
 export function getMobileAuthRedirectUri(): string {
   if (Platform.OS === 'web') {
@@ -27,6 +38,14 @@ export function getMobileAuthRedirectUri(): string {
     });
   }
 
-  // Force custom scheme (do not use exp://10.x… — that IP changes and breaks allowlist).
+  if (isRunningInExpoGo()) {
+    // Prefer Linking.createURL — matches Expo Router deep-link shape.
+    const viaLinking = Linking.createURL(MOBILE_AUTH_CALLBACK_PATH);
+    console.info('[auth] Expo Go redirect (add exact or exp://**/--/auth/callback in Supabase)', {
+      redirectTo: viaLinking,
+    });
+    return viaLinking;
+  }
+
   return STABLE_MOBILE_AUTH_REDIRECT;
 }
