@@ -77,9 +77,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   stateRef.current = state;
 
   const persist = useCallback(async (next: GameState) => {
+    if (!user?.id) {
+      console.warn('[game] persist skipped — Google login required');
+      return;
+    }
     setSaving(true);
     try {
-      await ensureSilentSession();
+      const session = await ensureSilentSession();
+      if (!session.user) {
+        console.warn('[game] persist skipped — no authenticated session');
+        return;
+      }
       const saved = await saveGameState(toPersistable(next));
       if (saved && typeof saved === 'object') {
         const payload =
@@ -95,7 +103,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setSaving(false);
     }
-  }, [rewardMap]);
+  }, [rewardMap, user?.id]);
 
   const queuePersist = useCallback(
     (next: GameState) => {
@@ -120,9 +128,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refetch = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      await ensureSilentSession();
+      const session = await ensureSilentSession();
+      if (!session.user) {
+        setLoading(false);
+        return;
+      }
       const [rewards, row] = await Promise.all([
         fetchEdubiteRewards(),
         fetchUserGameState(),
@@ -142,11 +158,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void refetch();
-  }, [refetch, user?.id]);
+  }, [refetch]);
 
   const completeDose: GameContextValue['completeDose'] = useCallback(
     async ({ classLevel, answers, correct, total }) => {

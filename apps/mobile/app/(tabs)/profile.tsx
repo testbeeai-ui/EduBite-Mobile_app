@@ -16,7 +16,6 @@ export default function ProfileScreen() {
     authError,
     clearAuthError,
     loading: authLoading,
-    signInWithGoogle,
     signOut,
   } = useAuth();
 
@@ -92,9 +91,7 @@ export default function ProfileScreen() {
 
           <View style={styles.noteBox}>
             <Text style={styles.noteText}>
-              {isGoogleUser
-                ? 'Progress saves to your Google-linked Supabase account and survives app restarts.'
-                : 'Sign in with Google to sync progress. Guest/anonymous saves need Anonymous auth enabled in Supabase.'}
+              Progress saves to your Google-linked Supabase account and survives app restarts.
             </Text>
           </View>
 
@@ -109,34 +106,17 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ) : null}
 
-          {isGoogleUser ? (
-            <TouchableOpacity
-              style={styles.authBtnSecondary}
-              disabled={authLoading}
-              onPress={() => {
-                void signOut();
-              }}
-            >
-              <Text style={styles.authBtnSecondaryText}>
-                {authLoading ? 'Please wait…' : 'Sign out'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.authBtn}
-              disabled={authLoading}
-              onPress={() => {
-                void (async () => {
-                  const ok = await signInWithGoogle();
-                  if (ok) router.replace('/');
-                })();
-              }}
-            >
-              <Text style={styles.authBtnText}>
-                {authLoading ? 'Opening Google…' : 'Continue with Google'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.authBtnSecondary}
+            disabled={authLoading}
+            onPress={() => {
+              void signOut();
+            }}
+          >
+            <Text style={styles.authBtnSecondaryText}>
+              {authLoading ? 'Please wait…' : 'Sign out'}
+            </Text>
+          </TouchableOpacity>
         </LinearGradient>
       </View>
 

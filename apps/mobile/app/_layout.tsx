@@ -1,7 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Slot, useRouter } from 'expo-router';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Slot, usePathname, useRouter } from 'expo-router';
 import { AppHeader, PhoneShell, theme } from '@edubite/ui';
+import { LoginGate } from '../components/auth/LoginGate';
 import { NotificationsPanel } from '../components/NotificationsPanel';
 import { AuthProvider, useAuth } from '../lib/auth/AuthProvider';
 import { GameProvider, useGame } from '../lib/game/GameProvider';
@@ -22,7 +31,7 @@ const QUICK_LINKS: Array<{ label: string; route: string }> = [
 function AppShell() {
   const router = useRouter();
   const { state } = useGame();
-  const { isGoogleUser, loading: authLoading, signInWithGoogle } = useAuth();
+  const { signOut } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
 
@@ -37,25 +46,13 @@ function AppShell() {
     router.navigate(route as never);
   };
 
-  const onLoginPress = async () => {
-    if (isGoogleUser) {
-      go('/profile');
-      return;
-    }
-    const ok = await signInWithGoogle();
-    if (ok) go('/');
-  };
-
   return (
     <PhoneShell>
       <AppHeader
         streak={state.streak}
         unreadCount={unreadCount}
-        showLogin={!isGoogleUser}
-        loginLabel={authLoading ? '…' : 'Google'}
-        onLoginPress={() => {
-          void onLoginPress();
-        }}
+        showLogin={false}
+        onLoginPress={() => go('/profile')}
         onOpenDrawer={() => setDrawerOpen(true)}
         onOpenNotifications={() => setNotesOpen(true)}
       />
@@ -88,6 +85,15 @@ function AppShell() {
                 <Text style={styles.linkText}>{link.label}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[styles.link, styles.signOutLink]}
+              onPress={() => {
+                setDrawerOpen(false);
+                void signOut();
+              }}
+            >
+              <Text style={styles.linkText}>🚪 Sign out</Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
@@ -95,17 +101,58 @@ function AppShell() {
   );
 }
 
+function RootGate() {
+  const pathname = usePathname();
+  const { loading, isGoogleUser } = useAuth();
+  const isAuthCallback =
+    pathname === '/auth/callback' || pathname?.endsWith('/auth/callback');
+
+  // Allow OAuth deep-link route even before GameProvider mounts.
+  if (isAuthCallback) {
+    return <Slot />;
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.boot}>
+        <ActivityIndicator color={theme.colors.purple} size="large" />
+        <Text style={styles.bootText}>Checking sign-in…</Text>
+      </View>
+    );
+  }
+
+  if (!isGoogleUser) {
+    return <LoginGate />;
+  }
+
+  return (
+    <GameProvider>
+      <AppShell />
+    </GameProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <GameProvider>
-        <AppShell />
-      </GameProvider>
+      <RootGate />
     </AuthProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  boot: {
+    flex: 1,
+    backgroundColor: theme.colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  bootText: {
+    color: theme.colors.textDim,
+    fontSize: 13,
+    fontFamily: theme.fonts.body,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -142,6 +189,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     marginBottom: 8,
+  },
+  signOutLink: {
+    marginTop: 8,
+    borderColor: 'rgba(220,60,60,0.35)',
   },
   linkText: {
     color: theme.colors.text,

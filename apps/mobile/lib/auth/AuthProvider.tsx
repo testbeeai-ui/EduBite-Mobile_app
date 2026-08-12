@@ -17,6 +17,7 @@ import {
 } from './google-sign-in';
 import { createSessionFromCallbackUrl } from './session-from-url';
 import { MOBILE_AUTH_CALLBACK_PATH, MOBILE_AUTH_SCHEME } from './redirect';
+import { isAnonymousUser, isAuthenticatedLearner } from './user-kind';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,16 +42,11 @@ function isAuthCallbackUrl(url: string): boolean {
     lower.includes(`${MOBILE_AUTH_SCHEME}%3a%2f%2f`);
   const pathHit =
     lower.includes(`/${MOBILE_AUTH_CALLBACK_PATH}`) ||
-    lower.includes(`--/${MOBILE_AUTH_CALLBACK_PATH}`); // Expo Go proxy form
-  return (schemeHit || lower.startsWith('exp://') || lower.startsWith('exps://')) && pathHit;
-}
-
-function isAnonymousUser(user: User | null | undefined): boolean {
-  if (!user) return true;
-  if (user.is_anonymous === true) return true;
-  const providers = user.app_metadata?.providers;
-  if (Array.isArray(providers) && providers.includes('anonymous')) return true;
-  return user.app_metadata?.provider === 'anonymous';
+    lower.includes(`--/${MOBILE_AUTH_CALLBACK_PATH}`);
+  return (
+    (schemeHit || lower.startsWith('exp://') || lower.startsWith('exps://')) &&
+    pathHit
+  );
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -59,6 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const applySession = useCallback((next: Session | null) => {
+    if (next?.user && isAnonymousUser(next.user)) {
+      console.warn('[auth] Dropping anonymous session — Google login required');
+      setSession(null);
+      void supabase.auth.signOut();
+      return;
+    }
     setSession(next);
   }, []);
 
@@ -89,7 +91,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleIncomingUrl = useCallback(
     async (url: string | null) => {
       if (!url || !isAuthCallbackUrl(url)) return;
-      // openAuthSessionAsync path owns the exchange while the browser sheet is open.
       if (isOAuthBrowserInFlight()) {
         console.info('[auth] deep link ignored — browser OAuth in flight');
         return;
@@ -126,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       applySession(result.session);
-      return true;
+      return isAuthenticatedLearner(result.session.user);
     } finally {
       setLoading(false);
     }
@@ -149,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       session,
       user,
-      isGoogleUser: Boolean(user) && !isAnonymousUser(user),
+      isGoogleUser: isAuthenticatedLearner(user),
       authError,
       clearAuthError: () => setAuthError(null),
       signInWithGoogle: doGoogleSignIn,
