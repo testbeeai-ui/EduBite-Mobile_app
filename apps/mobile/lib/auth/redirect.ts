@@ -25,10 +25,10 @@ export function isRunningInExpoGo(): boolean {
  *
  * Supabase Redirect URLs should include BOTH:
  *   - edubite://auth/callback
- *   - exp://**/--/auth/callback   (wildcard — LAN IP changes every network)
+ *   - exp://*/--/auth/callback (and/or the exact exp://IP:PORT URL from Metro)
  *
  * Google Cloud redirect stays:
- *   https://<project-ref>.supabase.co/auth/v1/callback
+ *   https://PROJECT_REF.supabase.co/auth/v1/callback
  */
 export function getMobileAuthRedirectUri(): string {
   if (Platform.OS === 'web') {
@@ -41,9 +41,10 @@ export function getMobileAuthRedirectUri(): string {
   if (isRunningInExpoGo()) {
     // Prefer Linking.createURL — matches Expo Router deep-link shape.
     const viaLinking = Linking.createURL(MOBILE_AUTH_CALLBACK_PATH);
-    console.info('[auth] Expo Go redirect (add exact or exp://**/--/auth/callback in Supabase)', {
-      redirectTo: viaLinking,
-    });
+    console.info(
+      '[auth] Expo Go redirect — add this exact URL (or a matching exp:// wildcard) in Supabase Redirect URLs',
+      { redirectTo: viaLinking },
+    );
     return viaLinking;
   }
 
