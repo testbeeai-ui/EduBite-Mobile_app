@@ -89,26 +89,33 @@ export function BrainGymHub() {
         </View>
 
         <View style={styles.pad}>
-          <View style={styles.tabs}>
+          <View style={styles.tabs} accessibilityRole="tablist">
             {(
               [
-                ['hub', '▦ Games'],
-                ['progress', '☆ Progress'],
-                ['leaderboard', '🏆 Ranks'],
+                ['hub', 'Games', '▦'],
+                ['progress', 'Progress', '☆'],
+                ['leaderboard', 'Ranks', '🏆'],
               ] as const
-            ).map(([key, label]) => (
-              <Pressable
-                key={key}
-                onPress={() => setHubTab(key)}
-                style={[styles.tab, hubTab === key && styles.tabActive]}
-              >
-                <Text
-                  style={[styles.tabText, hubTab === key && styles.tabTextActive]}
+            ).map(([key, label, icon]) => {
+              const active = hubTab === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setHubTab(key)}
+                  style={[styles.tab, active && styles.tabActive]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={label}
                 >
-                  {label}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text style={[styles.tabIcon, active && styles.tabIconActive]}>
+                    {icon}
+                  </Text>
+                  <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           {hubTab === 'hub' ? (
@@ -355,16 +362,37 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   statPillText: { color: theme.colors.text, fontSize: 12, fontWeight: '600' },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  tabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 14,
+    backgroundColor: theme.colors.card,
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
   tab: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: theme.colors.card,
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
-  tabActive: { backgroundColor: theme.colors.purpleSoft },
-  tabText: { color: theme.colors.textDim, fontWeight: '600', fontSize: 12 },
+  tabActive: {
+    backgroundColor: theme.colors.purpleSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(127,119,221,0.45)',
+  },
+  tabIcon: { fontSize: 14, color: theme.colors.textDim },
+  tabIconActive: { color: theme.colors.purple },
+  tabText: {
+    color: theme.colors.textDim,
+    fontWeight: '700',
+    fontSize: 12,
+  },
   tabTextActive: { color: theme.colors.purple },
   dailyCard: {
     backgroundColor: theme.colors.card,

@@ -80,6 +80,30 @@ export function hubSceneCameraForViewport(height: number): HubSceneCamera {
   };
 }
 
+/** Map Three.js NDC to RN view coords. Hide near edges instead of clamping (that pulled chips off their islands). */
+export function projectNdcToView(
+  ndcX: number,
+  ndcY: number,
+  ndcZ: number,
+  width: number,
+  height: number,
+  chipW: number,
+  chipH: number,
+  /** Keep chips below the title/stats overlay (px from top of the GL view). */
+  minTop = 0,
+): { left: number; top: number; visible: boolean } {
+  const left = (ndcX * 0.5 + 0.5) * width - chipW / 2;
+  const top = (-ndcY * 0.5 + 0.5) * height - chipH / 2;
+  const visible =
+    ndcZ < 1 &&
+    Math.abs(ndcX) < 0.78 &&
+    Math.abs(ndcY) < 0.78 &&
+    top >= minTop &&
+    top + chipH <= height - 8;
+  if (!visible) return { left: -400, top: -400, visible: false };
+  return { left, top, visible: true };
+}
+
 export function buildHubSceneLayout(
   games: HubSceneGameInput[],
   playsById: Record<string, number | undefined>,

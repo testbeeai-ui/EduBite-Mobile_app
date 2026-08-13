@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   buildHubSceneLayout,
   hubSceneCameraForViewport,
+  projectNdcToView,
   HUB_SCENE_CATEGORIES,
   HUB_SCENE_CATEGORY_COLORS,
   HUB_SCENE_WEB_CAMERA,
@@ -73,5 +74,22 @@ describe('hubSceneCameraForViewport', () => {
     const cam = hubSceneCameraForViewport(248);
     assert.ok(cam.position[2] > HUB_SCENE_WEB_CAMERA.position[2]);
     assert.ok(cam.position[1] > HUB_SCENE_WEB_CAMERA.position[1]);
+  });
+});
+
+describe('projectNdcToView', () => {
+  it('centers a chip on the projected point and hides chips near the card edge', () => {
+    const on = projectNdcToView(0, 0, 0.2, 360, 400, 96, 24);
+    assert.equal(on.visible, true);
+    assert.equal(on.left, 180 - 48);
+    assert.equal(on.top, 200 - 12);
+
+    const clipped = projectNdcToView(0.95, 0.1, 0.2, 360, 400, 96, 24);
+    assert.equal(clipped.visible, false);
+  });
+
+  it('hides chips that would cover the title/stats overlay', () => {
+    const underTitle = projectNdcToView(0, 0.7, 0.2, 360, 400, 96, 24, 130);
+    assert.equal(underTitle.visible, false);
   });
 });

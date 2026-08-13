@@ -3,6 +3,10 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { HubSceneCamera, HubSceneLayout } from './hub-scene-layout';
 import { HUB_SCENE_WEB_CAMERA } from './hub-scene-layout';
+import {
+  makeBrainGymFacePixels,
+  resolveCubeFaceScale,
+} from './hub-scene-face';
 
 function standardMaterial(
   color: string,
@@ -25,56 +29,12 @@ function standardMaterial(
   });
 }
 
-/** Tiny 5-row glyphs so the cube face matches Edubite's BRAIN / GYM text without a font file. */
-const GLYPHS: Record<string, string[]> = {
-  A: ['01110', '10001', '11111', '10001', '10001'],
-  B: ['11110', '10001', '11110', '10001', '11110'],
-  E: ['11111', '10000', '11110', '10000', '11111'],
-  G: ['01111', '10000', '10111', '10001', '01110'],
-  I: ['11111', '00100', '00100', '00100', '11111'],
-  M: ['10001', '11011', '10101', '10001', '10001'],
-  N: ['10001', '11001', '10101', '10011', '10001'],
-  R: ['11110', '10001', '11110', '10100', '10010'],
-  Y: ['10001', '01010', '00100', '00100', '00100'],
-};
-
 function makeBrainGymFaceTexture() {
   const width = 128;
   const height = 64;
-  const data = new Uint8Array(width * height * 4);
-  const plot = (px: number, py: number) => {
-    if (px < 0 || py < 0 || px >= width || py >= height) return;
-    const i = (py * width + px) * 4;
-    data[i] = 255;
-    data[i + 1] = 255;
-    data[i + 2] = 255;
-    data[i + 3] = 255;
-  };
-  const drawLine = (text: string, originX: number, originY: number, scale: number) => {
-    let x = originX;
-    for (const ch of text) {
-      const glyph = GLYPHS[ch];
-      if (!glyph) {
-        x += 3 * scale;
-        continue;
-      }
-      for (let row = 0; row < glyph.length; row += 1) {
-        const bits = glyph[row] ?? '';
-        for (let col = 0; col < bits.length; col += 1) {
-          if (bits[col] !== '1') continue;
-          for (let dy = 0; dy < scale; dy += 1) {
-            for (let dx = 0; dx < scale; dx += 1) {
-              plot(x + col * scale + dx, originY + row * scale + dy);
-            }
-          }
-        }
-      }
-      x += 6 * scale;
-    }
-  };
-  drawLine('BRAIN', 16, 10, 3);
-  drawLine('GYM', 38, 34, 3);
+  const data = makeBrainGymFacePixels(width, height);
   const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  texture.flipY = false;
   texture.needsUpdate = true;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.magFilter = THREE.NearestFilter;
@@ -131,6 +91,7 @@ export function createHubSceneGraph(
   const center = new THREE.Mesh(centerGeo, centerMat);
   root.add(center);
 
+  // Text is a child of root so it sticks to the cube and rotates with it.
   const faceTex = makeBrainGymFaceTexture();
   textures.push(faceTex);
   const faceMat = new THREE.MeshBasicMaterial({
@@ -139,8 +100,9 @@ export function createHubSceneGraph(
     depthWrite: false,
   });
   materials.push(faceMat);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(1.85, 0.9), faceMat);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(1.85, 0.95), faceMat);
   face.position.set(0, 0, 1.14);
+  face.scale.set(...resolveCubeFaceScale());
   root.add(face);
 
   const labelAnchors: HubSceneLabelAnchor[] = [];
@@ -161,7 +123,7 @@ export function createHubSceneGraph(
     group.add(platform);
 
     const anchor = new THREE.Object3D();
-    anchor.position.set(0, 0.55, 0);
+    anchor.position.set(0, 1.15, 0);
     group.add(anchor);
     labelAnchors.push({
       category: cluster.category,

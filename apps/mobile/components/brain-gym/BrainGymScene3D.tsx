@@ -15,10 +15,14 @@ import { GAMES } from '../../lib/brain-gym/registry';
 import {
   buildHubSceneLayout,
   hubSceneCameraForViewport,
+  projectNdcToView,
 } from '../../lib/brain-gym/hub-scene-layout';
 import { createHubSceneRenderer } from '../../lib/brain-gym/expo-gl-renderer';
 import { createHubSceneGraph } from '../../lib/brain-gym/hub-scene-three';
 import { useBrainGym } from '../../lib/brain-gym/hooks/useBrainGym';
+
+/** Keep category chips below the title / stats block in the hero card. */
+const CHIP_MIN_TOP = 132;
 
 function HeroCubeFallback() {
   return (
@@ -38,7 +42,7 @@ export function BrainGymScene3D() {
   const lastDxRef = useRef(0);
   const disposeRef = useRef<(() => void) | null>(null);
   const startedRef = useRef(false);
-  const sizeRef = useRef({ width: 360, height: 360 });
+  const sizeRef = useRef({ width: 360, height: 400 });
   const chipRefs = useRef<Array<View | null>>([]);
   const projectScratch = useRef(new THREE.Vector3());
 
@@ -52,6 +56,7 @@ export function BrainGymScene3D() {
       ),
     [progress.games],
   );
+  const chipSizeRef = useRef(layout.clusters.map(() => ({ w: 100, h: 26 })));
 
   useEffect(() => () => disposeRef.current?.(), []);
 
@@ -116,26 +121,34 @@ export function BrainGymScene3D() {
         camera.aspect = gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight);
         camera.updateProjectionMatrix();
 
+        root.updateMatrixWorld(true);
+        camera.updateMatrixWorld(true);
         renderer.render(scene, camera);
         gl.endFrameEXP();
 
         const { width, height } = sizeRef.current;
         const world = projectScratch.current;
-        const chipW = 96;
         labelAnchors.forEach((anchor, i) => {
           const node = chipRefs.current[i];
           if (!node) return;
           anchor.object.getWorldPosition(world);
           world.project(camera);
-          const x = (world.x * 0.5 + 0.5) * width;
-          const y = (-world.y * 0.5 + 0.5) * height;
-          const onScreen =
-            world.z < 1 && x > 8 && x < width - 8 && y > 8 && y < height - 8;
+          const size = chipSizeRef.current[i] ?? { w: 100, h: 26 };
+          const pos = projectNdcToView(
+            world.x,
+            world.y,
+            world.z,
+            width,
+            height,
+            size.w,
+            size.h,
+            CHIP_MIN_TOP,
+          );
           node.setNativeProps({
             style: {
-              left: Math.min(Math.max(x - chipW / 2, 4), width - chipW - 4),
-              top: Math.min(Math.max(y - 12, 4), height - 28),
-              opacity: onScreen ? 1 : 0,
+              left: pos.left,
+              top: pos.top,
+              opacity: pos.visible ? 1 : 0,
             },
           });
         });
@@ -170,6 +183,12 @@ export function BrainGymScene3D() {
           key={cluster.category}
           ref={(node) => {
             chipRefs.current[i] = node;
+          }}
+          onLayout={(e) => {
+            chipSizeRef.current[i] = {
+              w: e.nativeEvent.layout.width,
+              h: e.nativeEvent.layout.height,
+            };
           }}
           pointerEvents="none"
           style={styles.clusterChip}
