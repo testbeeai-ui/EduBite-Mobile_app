@@ -1,81 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { sfx } from '../utils/sound';
-
-type Board = number[][];
-
-function empty(): Board {
-  return Array.from({ length: 4 }, () => Array(4).fill(0));
-}
-
-function spawn(board: Board): Board {
-  const next = board.map((r) => [...r]);
-  const empties: Array<[number, number]> = [];
-  next.forEach((row, r) =>
-    row.forEach((v, c) => {
-      if (!v) empties.push([r, c]);
-    }),
-  );
-  if (!empties.length) return next;
-  const [r, c] = empties[Math.floor(Math.random() * empties.length)]!;
-  next[r]![c] = Math.random() < 0.9 ? 2 : 4;
-  return next;
-}
-
-function slide(row: number[]): { row: number[]; gained: number; moved: boolean } {
-  const filtered = row.filter((v) => v !== 0);
-  const out: number[] = [];
-  let gained = 0;
-  for (let i = 0; i < filtered.length; i++) {
-    if (filtered[i] === filtered[i + 1]) {
-      const v = filtered[i]! * 2;
-      out.push(v);
-      gained += v;
-      i++;
-    } else out.push(filtered[i]!);
-  }
-  while (out.length < 4) out.push(0);
-  const moved = out.some((v, i) => v !== row[i]);
-  return { row: out, gained, moved };
-}
-
-function move(
-  board: Board,
-  dir: 'left' | 'right' | 'up' | 'down',
-): { board: Board; gained: number; moved: boolean } {
-  let gained = 0;
-  let moved = false;
-  let next = board.map((r) => [...r]);
-  const applyRow = (r: number, reverse: boolean) => {
-    const row = reverse ? [...next[r]!].reverse() : [...next[r]!];
-    const res = slide(row);
-    gained += res.gained;
-    moved = moved || res.moved;
-    next[r] = reverse ? res.row.reverse() : res.row;
-  };
-  if (dir === 'left' || dir === 'right') {
-    for (let r = 0; r < 4; r++) applyRow(r, dir === 'right');
-  } else {
-    // transpose
-    const t = empty();
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) t[c]![r] = next[r]![c]!;
-    next = t;
-    for (let r = 0; r < 4; r++) applyRow(r, dir === 'down');
-    const back = empty();
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) back[c]![r] = next[r]![c]!;
-    next = back;
-  }
-  return { board: next, gained, moved };
-}
-
-function canMove(board: Board): boolean {
-  for (const dir of ['left', 'right', 'up', 'down'] as const) {
-    if (move(board, dir).moved) return true;
-  }
-  return false;
-}
+import {
+  canMove,
+  emptyBoard,
+  move,
+  spawn,
+  type Board,
+  type Dir,
+} from './game-2048-logic';
 
 export function Game2048({
   difficulty,
@@ -85,18 +20,35 @@ export function Game2048({
   paused,
 }: GameComponentProps) {
   const target = difficulty === 'easy' ? 128 : difficulty === 'medium' ? 256 : 2048;
-  const [board, setBoard] = useState(() => spawn(spawn(empty())));
+  const [board, setBoard] = useState<Board>(() => spawn(spawn(emptyBoard())));
   const [score, setScore] = useState(0);
   const [start] = useState(() => Date.now());
   const done = useRef(false);
+  const boardRef = useRef(board);
+  const scoreRef = useRef(score);
+  const pausedRef = useRef(paused);
 
-  const applyDir = (dir: 'left' | 'right' | 'up' | 'down') => {
-    if (paused || done.current) return;
-    const res = move(board, dir);
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  const applyDirRef = useRef<(dir: Dir) => void>(() => {});
+
+  applyDirRef.current = (dir: Dir) => {
+    if (pausedRef.current || done.current) return;
+    const res = move(boardRef.current, dir);
     if (!res.moved) return;
     sfx.tap(soundEnabled);
     const withSpawn = spawn(res.board);
-    const ns = score + res.gained;
+    const ns = scoreRef.current + res.gained;
+    scoreRef.current = ns;
+    boardRef.current = withSpawn;
     setScore(ns);
     onScoreChange?.(ns);
     setBoard(withSpawn);
@@ -126,13 +78,15 @@ export function Game2048({
 
   const pan = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, g) =>
         Math.abs(g.dx) > 12 || Math.abs(g.dy) > 12,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (_, g) => {
         if (Math.abs(g.dx) > Math.abs(g.dy)) {
-          applyDir(g.dx > 0 ? 'right' : 'left');
+          applyDirRef.current(g.dx > 0 ? 'right' : 'left');
         } else {
-          applyDir(g.dy > 0 ? 'down' : 'up');
+          applyDirRef.current(g.dy > 0 ? 'down' : 'up');
         }
       },
     }),

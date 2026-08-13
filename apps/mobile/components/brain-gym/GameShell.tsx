@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@edubite/ui';
 import { GAME_MAP } from '../../lib/brain-gym/registry';
 import { GAME_COMPONENTS } from '../../lib/brain-gym/games';
@@ -14,10 +14,12 @@ import { useBrainGym } from '../../lib/brain-gym/hooks/useBrainGym';
 import { isDifficultyLocked } from '../../lib/brain-gym/storage';
 import type { Difficulty } from '../../lib/brain-gym/types';
 import { formatMsAsClock } from '../../lib/brain-gym/utils';
+import { PostGameLobby, PreGameLobby } from './PreGameLobby';
 
 type Phase = 'intro' | 'play' | 'result';
 
 export function GameShell() {
+  const insets = useSafeAreaInsets();
   const {
     activeGameId,
     closeGame,
@@ -56,6 +58,14 @@ export function GameShell() {
   }, [activeGameId, meta, clearLastResult]);
 
   useEffect(() => {
+    if (!activeGameId) return;
+    if (!isDifficultyLocked(progress, activeGameId, difficulty)) return;
+    const order: Difficulty[] = ['easy', 'medium', 'hard'];
+    const next = order.find((d) => !isDifficultyLocked(progress, activeGameId, d));
+    if (next) setDifficulty(next);
+  }, [activeGameId, difficulty, progress, setDifficulty]);
+
+  useEffect(() => {
     if (phase !== 'play' || paused) return;
     const id = setInterval(() => {
       setElapsed(Date.now() - startRef.current);
@@ -65,21 +75,33 @@ export function GameShell() {
 
   if (!activeGameId || !meta || !Game) return null;
 
-  const difficulties: Difficulty[] = ['easy', 'medium', 'hard'];
+  const startPlay = () => {
+    completionHandledRef.current = false;
+    startRef.current = Date.now();
+    setElapsed(0);
+    setPaused(false);
+    setPhase('play');
+    setRestartKey((k) => k + 1);
+  };
+
+  const tip =
+    activeGameId === 'reaction-time'
+      ? "Don't tap before green."
+      : undefined;
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen">
-      <View style={styles.root}>
+      <View
+        style={[
+          styles.root,
+          {
+            paddingTop: Math.max(insets.top, 10),
+            paddingBottom: Math.max(insets.bottom, 8),
+          },
+        ]}
+      >
         <View style={styles.topBar}>
-          <Pressable
-            onPress={() => {
-              if (phase === 'play' && !completionHandledRef.current) {
-                // confirm-ish: just close for mobile speed
-              }
-              closeGame();
-            }}
-            style={styles.iconBtn}
-          >
+          <Pressable onPress={closeGame} style={styles.iconBtn}>
             <Text style={styles.iconBtnText}>✕</Text>
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -115,120 +137,65 @@ export function GameShell() {
           </View>
         ) : null}
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.body}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={styles.body}>
           {phase === 'intro' ? (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>How to play</Text>
-              <Text style={styles.cardBody}>{meta.instructions}</Text>
-              <Text style={styles.diffLabel}>Difficulty</Text>
-              <View style={styles.diffRow}>
-                {difficulties.map((d) => {
-                  const locked = isDifficultyLocked(progress, activeGameId, d);
-                  const active = difficulty === d;
-                  return (
-                    <Pressable
-                      key={d}
-                      disabled={locked}
-                      onPress={() => setDifficulty(d)}
-                      style={[
-                        styles.diffChip,
-                        active && styles.diffChipActive,
-                        locked && styles.diffChipLocked,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.diffText,
-                          active && styles.diffTextActive,
-                        ]}
-                      >
-                        {d}
-                        {locked ? ' 🔒' : ''}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Pressable
-                style={styles.primaryBtn}
-                onPress={() => {
-                  completionHandledRef.current = false;
-                  startRef.current = Date.now();
-                  setElapsed(0);
-                  setPhase('play');
-                  setRestartKey((k) => k + 1);
-                }}
-              >
-                <Text style={styles.primaryBtnText}>Start</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {phase === 'play' ? (
-            <Game
-              key={restartKey}
+            <PreGameLobby
+              instructions={meta.instructions}
+              tip={tip}
               difficulty={difficulty}
-              soundEnabled={progress.soundEnabled}
-              paused={paused}
-              restartKey={restartKey}
-              onScoreChange={setScore}
-              onLivesChange={setLives}
-              onComplete={(result) => {
-                if (completionHandledRef.current) return;
-                completionHandledRef.current = true;
-                completeSession(result);
-                setPhase('result');
-              }}
+              onDifficultyChange={setDifficulty}
+              isDifficultyLocked={(d: Difficulty) =>
+                isDifficultyLocked(progress, activeGameId, d)
+              }
+              onStart={startPlay}
+              startLabel={isDailyRun ? 'Start Daily' : 'Start'}
+              watermarkEmoji={meta.emoji}
             />
           ) : null}
 
-          {phase === 'result' && lastResult ? (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>
-                {lastResult.result.won ? 'You won!' : 'Session over'}
-              </Text>
-              <Text style={styles.cardBody}>
-                Score {lastResult.result.score} ·{' '}
-                {formatMsAsClock(lastResult.result.timeMs)}
-                {lastResult.rdmGain > 0
-                  ? ` · +${lastResult.rdmGain} RDM`
-                  : ''}
-              </Text>
-              {lastResult.newBadges.length > 0 ? (
-                <Text style={styles.cardBody}>
-                  Badges: {lastResult.newBadges.join(', ')}
-                </Text>
-              ) : null}
-              <View style={styles.rowBtns}>
-                <Pressable
-                  style={[styles.primaryBtn, { flex: 1 }]}
-                  onPress={() => {
-                    completionHandledRef.current = false;
-                    clearLastResult();
-                    startRef.current = Date.now();
-                    setElapsed(0);
-                    setScore(0);
-                    setLives(meta.maxLives ?? 0);
-                    setRestartKey((k) => k + 1);
-                    setPhase('play');
-                  }}
-                >
-                  <Text style={styles.primaryBtnText}>Play again</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.secondaryBtn, { flex: 1 }]}
-                  onPress={closeGame}
-                >
-                  <Text style={styles.secondaryBtnText}>Done</Text>
-                </Pressable>
-              </View>
+          {phase === 'play' ? (
+            <View style={styles.playArea}>
+              <Game
+                key={restartKey}
+                difficulty={difficulty}
+                soundEnabled={progress.soundEnabled}
+                paused={paused}
+                restartKey={restartKey}
+                onScoreChange={setScore}
+                onLivesChange={setLives}
+                onComplete={(result) => {
+                  if (completionHandledRef.current) return;
+                  completionHandledRef.current = true;
+                  completeSession(result);
+                  setPhase('result');
+                }}
+              />
             </View>
           ) : null}
-        </ScrollView>
+
+          {phase === 'result' && lastResult ? (
+            <PostGameLobby
+              won={lastResult.result.won}
+              summary={`Score ${lastResult.result.score} · ${formatMsAsClock(lastResult.result.timeMs)}${
+                lastResult.rdmGain > 0 ? ` · +${lastResult.rdmGain} RDM` : ''
+              }`}
+              badgesLine={
+                lastResult.newBadges.length > 0
+                  ? `Badges: ${lastResult.newBadges.join(', ')}`
+                  : null
+              }
+              watermarkEmoji={meta.emoji}
+              onPlayAgain={() => {
+                completionHandledRef.current = false;
+                clearLastResult();
+                setScore(0);
+                setLives(meta.maxLives ?? 0);
+                startPlay();
+              }}
+              onDone={closeGame}
+            />
+          ) : null}
+        </View>
       </View>
     </Modal>
   );
@@ -241,7 +208,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 12,
-    paddingTop: 14,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
@@ -264,51 +230,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   stat: { color: theme.colors.textDim, fontWeight: '600' },
-  body: { padding: 16, paddingBottom: 40 },
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+  body: { flex: 1 },
+  playArea: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  cardTitle: {
-    color: theme.colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  cardBody: { color: theme.colors.textDim, lineHeight: 20, marginBottom: 12 },
-  diffLabel: {
-    color: theme.colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  diffRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  diffChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: theme.colors.cardHi,
-  },
-  diffChipActive: { backgroundColor: theme.colors.purple },
-  diffChipLocked: { opacity: 0.4 },
-  diffText: { color: theme.colors.textDim, textTransform: 'capitalize' },
-  diffTextActive: { color: '#fff', fontWeight: '700' },
-  primaryBtn: {
-    backgroundColor: theme.colors.purple,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryBtnText: { color: '#fff', fontWeight: '800' },
-  secondaryBtn: {
-    backgroundColor: theme.colors.cardHi,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryBtnText: { color: theme.colors.text, fontWeight: '700' },
-  rowBtns: { flexDirection: 'row', gap: 10, marginTop: 8 },
 });

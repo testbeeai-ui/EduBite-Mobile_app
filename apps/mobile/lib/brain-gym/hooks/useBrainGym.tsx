@@ -17,6 +17,7 @@ import {
   setSound,
   toggleFavorite,
 } from '../storage';
+import { getGame } from '../registry';
 import type {
   BrainGymProgress,
   Difficulty,
@@ -86,7 +87,13 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
     setActiveGameId(id);
     setIsDailyRun(daily);
     setLastResult(null);
-  }, []);
+    const preferred = getGame(id).defaultDifficulty;
+    const order: Difficulty[] = [preferred, 'easy', 'medium', 'hard'];
+    const pick =
+      order.find((d) => !progress || !isDifficultyLocked(progress, id, d)) ??
+      'easy';
+    setDifficulty(pick);
+  }, [progress]);
 
   const closeGame = useCallback(() => {
     setActiveGameId(null);

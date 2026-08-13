@@ -68,8 +68,8 @@ export function MatchShadowGame({
     <View style={styles.board}>
       <Text style={styles.status}>Match the shadow · Round {n}/{needed}</Text>
       <View style={styles.shadowBox}>
-        <Text style={styles.shadowEmoji}>{round.answer.solid}</Text>
-        <Text style={styles.hint}>silhouette target</Text>
+        <Text style={[styles.shadowEmoji, styles.silhouette]}>{round.answer.solid}</Text>
+        <Text style={styles.hint}>Match this silhouette</Text>
       </View>
       <View style={styles.grid}>
         {round.options.map((o) => (
@@ -98,7 +98,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0E16',
     borderRadius: 14,
   },
-  shadowEmoji: { fontSize: 56, opacity: 0.35 },
+  shadowEmoji: { fontSize: 56 },
+  silhouette: { opacity: 0.28, color: '#000' },
   hint: { color: '#5C6577', marginTop: 6, fontSize: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
   cell: {

@@ -45,7 +45,7 @@
     "android": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --android",
     "ios": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --ios",
     "web": "set EXPO_NO_TYPESCRIPT_SETUP=1&& expo start --web",
-    "test": "node --import tsx --test lib/auth/oauth-params.test.ts lib/auth/user-kind.test.ts lib/auth/google-id-token-result.test.ts lib/auth/dev-preview.test.ts lib/brain-gym/hub-scene-layout.test.ts lib/brain-gym/expo-gl-renderer.test.ts",
+    "test": "node --import tsx --test lib/auth/oauth-params.test.ts lib/auth/user-kind.test.ts lib/auth/google-id-token-result.test.ts lib/auth/dev-preview.test.ts lib/brain-gym/hub-scene-layout.test.ts lib/brain-gym/expo-gl-renderer.test.ts lib/brain-gym/hub-scene-three.test.ts lib/brain-gym/games-registry.test.ts lib/brain-gym/game-2048-logic.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "private": true
