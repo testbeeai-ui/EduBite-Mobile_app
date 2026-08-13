@@ -1,11 +1,65 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
+import { COLORS, HudPill, PlayStage } from './_shared';
 
-const ITEMS = ['🔑', '💍', '🪙', '📎', '🧩', '🧿', '🎩', '🧸', '📷', '🧪'];
+const POOL = [
+  '🔑',
+  '💍',
+  '🪙',
+  '📎',
+  '🧩',
+  '🧿',
+  '🎩',
+  '🧸',
+  '📷',
+  '🧪',
+  '🌙',
+  '⭐',
+  '🔔',
+  '💎',
+  '🎯',
+  '🪄',
+  '📦',
+  '🛡️',
+  '🧭',
+  '⌛',
+];
+
+type SceneCell = {
+  id: string;
+  emoji: string;
+  isTarget: boolean;
+};
+
+function buildScene(targetCount: number): {
+  targets: string[];
+  cells: SceneCell[];
+  cols: number;
+} {
+  const cols = 4;
+  const rows = 5;
+  const slots = cols * rows;
+  const shuffled = shuffle([...POOL]);
+  const targets = shuffled.slice(0, targetCount);
+  const decoys = shuffled.slice(targetCount, slots);
+  const cells = shuffle([
+    ...targets.map((emoji, i) => ({
+      id: `t-${emoji}-${i}`,
+      emoji,
+      isTarget: true,
+    })),
+    ...decoys.map((emoji, i) => ({
+      id: `d-${emoji}-${i}`,
+      emoji,
+      isTarget: false,
+    })),
+  ]).slice(0, slots);
+  return { targets, cells, cols };
+}
 
 export function HiddenObjectsGame({
   difficulty,
@@ -16,51 +70,58 @@ export function HiddenObjectsGame({
 }: GameComponentProps) {
   const count = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
   const duration = difficulty === 'hard' ? 35000 : 45000;
-  const targets = useState(() => shuffle(ITEMS).slice(0, count))[0];
-  const [found, setFound] = useState<string[]>([]);
+  const scene = useMemo(() => buildScene(count), [count]);
+  const [found, setFound] = useState<Set<string>>(() => new Set());
   const [score, setScore] = useState(0);
   const [start] = useState(() => Date.now());
+  const [leftMs, setLeftMs] = useState(duration);
   const done = useRef(false);
-  const clutter = useState(() =>
-    shuffle([...ITEMS, ...ITEMS, ...ITEMS]).slice(0, 18),
-  )[0];
+  const scoreRef = useRef(0);
+  const foundRef = useRef(found);
+
+  useEffect(() => {
+    foundRef.current = found;
+  }, [found]);
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
 
   useEffect(() => {
     const id = setInterval(() => {
       if (done.current || paused) return;
-      if (Date.now() - start >= duration) {
+      const elapsed = Date.now() - start;
+      setLeftMs(Math.max(0, duration - elapsed));
+      if (elapsed >= duration) {
         done.current = true;
         onComplete({
-          score,
-          won: found.length >= count,
+          score: scoreRef.current,
+          won: foundRef.current.size >= count,
           timeMs: Date.now() - start,
           difficulty,
         });
       }
     }, 200);
     return () => clearInterval(id);
-  }, [paused, start, duration, score, found.length, count, onComplete, difficulty]);
+  }, [paused, start, duration, count, onComplete, difficulty]);
 
-  const tap = (item: string, index: number) => {
+  const tap = (cell: SceneCell) => {
     if (paused || done.current) return;
-    if (!targets.includes(item) || found.includes(`${item}-${index}`)) {
+    if (found.has(cell.emoji)) {
       sfx.wrong(soundEnabled);
       return;
     }
-    if (!targets.includes(item)) return;
-    // mark by value once
-    if (found.some((f) => f.startsWith(item))) {
+    if (!cell.isTarget) {
       sfx.wrong(soundEnabled);
       return;
     }
     sfx.correct(soundEnabled);
-    const nextFound = [...found, `${item}-${index}`];
-    setFound(nextFound);
+    const next = new Set(found);
+    next.add(cell.emoji);
+    setFound(next);
     const ns = score + Math.round(40 * difficultyMultiplier(difficulty));
     setScore(ns);
     onScoreChange?.(ns);
-    const uniqueFound = new Set(nextFound.map((f) => f.split('-')[0]));
-    if (uniqueFound.size >= count) {
+    if (next.size >= count) {
       done.current = true;
       onComplete({
         score: ns,
@@ -72,48 +133,119 @@ export function HiddenObjectsGame({
   };
 
   return (
-    <View style={styles.board}>
-      <Text style={styles.status}>
-        Find: {targets.join(' ')} · {found.length}/{count}
-      </Text>
-      <View style={styles.scene}>
-        {clutter.map((item, i) => (
-          <Pressable
-            key={`${item}-${i}`}
-            onPress={() => tap(item, i)}
-            style={[
-              styles.item,
-              {
-                left: `${(i * 17) % 85}%`,
-                top: `${(i * 23) % 75}%`,
-                opacity: found.some((f) => f.startsWith(item)) ? 0.2 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.emoji}>{item}</Text>
-          </Pressable>
-        ))}
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            Find the targets · {found.size}/{count} · {Math.ceil(leftMs / 1000)}s
+          </Text>
+        </HudPill>
+
+        <View style={styles.targetRow}>
+          {scene.targets.map((emoji) => {
+            const got = found.has(emoji);
+            return (
+              <View
+                key={emoji}
+                style={[styles.targetChip, got && styles.targetChipDone]}
+              >
+                <Text style={[styles.targetEmoji, got && styles.targetEmojiDone]}>
+                  {got ? '✓' : emoji}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.scene}>
+          {scene.cells.map((cell) => {
+            const got = found.has(cell.emoji) && cell.isTarget;
+            return (
+              <Pressable
+                key={cell.id}
+                onPress={() => tap(cell)}
+                disabled={got}
+                style={({ pressed }) => [
+                  styles.cell,
+                  { width: `${100 / scene.cols}%` },
+                  got && styles.cellFound,
+                  pressed && !got && styles.cellPressed,
+                ]}
+              >
+                <View style={styles.cellInner}>
+                  <Text style={[styles.emoji, got && styles.emojiFound]}>
+                    {got ? '✓' : cell.emoji}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
-    </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
   board: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    padding: 14,
+  },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
+  targetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  targetChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(127,119,221,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(127,119,221,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  targetChipDone: {
+    backgroundColor: 'rgba(29,158,117,0.2)',
+    borderColor: 'rgba(29,158,117,0.45)',
+  },
+  targetEmoji: { fontSize: 22 },
+  targetEmojiDone: { color: COLORS.green, fontWeight: '800', fontSize: 18 },
+  scene: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignContent: 'stretch',
+    backgroundColor: '#0B0F16',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    padding: 12,
-    backgroundColor: 'rgba(11,13,18,0.4)',
-  },
-  status: { textAlign: 'center', color: '#8B96A8', marginBottom: 10, fontWeight: '600' },
-  scene: {
-    height: 280,
-    borderRadius: 14,
-    backgroundColor: '#141A23',
+    borderColor: COLORS.line,
     overflow: 'hidden',
-    position: 'relative',
+    padding: 4,
   },
-  item: { position: 'absolute', padding: 6 },
-  emoji: { fontSize: 28 },
+  cell: {
+    aspectRatio: 1,
+    padding: 4,
+  },
+  cellInner: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface2,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellFound: { opacity: 0.55 },
+  cellPressed: { opacity: 0.8 },
+  emoji: { fontSize: 26 },
+  emojiFound: { color: COLORS.green, fontSize: 20, fontWeight: '800' },
 });

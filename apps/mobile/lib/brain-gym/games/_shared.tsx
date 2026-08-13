@@ -26,6 +26,20 @@ export const COLORS = {
   green: "#34D399",
 } as const;
 
+/**
+ * Full play-area shell — fills GameShell body so games aren't stuck at the top
+ * with dead black below.
+ */
+export function PlayStage({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return <View style={[styles.stage, style]}>{children}</View>;
+}
+
 export function GameBoard({
   children,
   style,
@@ -38,6 +52,18 @@ export function GameBoard({
 
 export function StatusLine({ children }: { children: React.ReactNode }) {
   return <Text style={styles.statusLine}>{children}</Text>;
+}
+
+export function HudPill({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.hudPill}>
+      {typeof children === "string" ? (
+        <Text style={styles.hudPillText}>{children}</Text>
+      ) : (
+        children
+      )}
+    </View>
+  );
 }
 
 /** Wraps children into an N-column grid using percentage widths. */
@@ -181,15 +207,20 @@ export function Pill({
 }
 
 const styles = StyleSheet.create({
+  stage: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+  },
   board: {
+    flex: 1,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.line,
-    backgroundColor: "rgba(20,26,35,0.6)",
-    padding: 14,
+    backgroundColor: "rgba(20,26,35,0.92)",
+    padding: 16,
     width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
+    alignSelf: "stretch",
   },
   statusLine: {
     textAlign: "center",
@@ -197,6 +228,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.textDim,
     marginBottom: 12,
+  },
+  hudPill: {
+    alignSelf: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(127,119,221,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(127,119,221,0.28)",
+    marginBottom: 14,
+  },
+  hudPillText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
   },
   cell: {
     aspectRatio: 1,

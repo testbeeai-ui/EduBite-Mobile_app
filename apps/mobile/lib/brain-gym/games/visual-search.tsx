@@ -4,9 +4,9 @@ import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { range } from '../utils';
 import { sfx } from '../utils/sound';
-import { usePausableScheduler } from './_pausable-scheduler';
+import { COLORS, HudPill, PlayStage } from './_shared';
 
-const COLORS = ['#60a5fa', '#f472b6', '#2dd4bf', '#fbbf24', '#a78bfa', '#ef4444'];
+const SWATCHES = ['#60a5fa', '#f472b6', '#2dd4bf', '#fbbf24', '#a78bfa', '#ef4444'];
 
 export function VisualSearchGame({
   difficulty,
@@ -19,20 +19,21 @@ export function VisualSearchGame({
   const size = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
   const cells = size * size;
   const duration = difficulty === 'hard' ? 25000 : 30000;
-  const [target, setTarget] = useState(COLORS[0]!);
+  const [target, setTarget] = useState(SWATCHES[0]!);
   const [grid, setGrid] = useState<string[]>([]);
   const [found, setFound] = useState(0);
   const [needed, setNeeded] = useState(1);
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
+  const [leftMs, setLeftMs] = useState(duration);
   const [start] = useState(() => Date.now());
   const done = useRef(false);
+  const scoreRef = useRef(0);
 
   const gen = () => {
-    const t = COLORS[Math.floor(Math.random() * COLORS.length)]!;
+    const t = SWATCHES[Math.floor(Math.random() * SWATCHES.length)]!;
     const need = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5;
-    const g = range(cells).map(() => COLORS[Math.floor(Math.random() * COLORS.length)]!);
-    // ensure enough targets
+    const g = range(cells).map(() => SWATCHES[Math.floor(Math.random() * SWATCHES.length)]!);
     for (let i = 0; i < need; i++) g[i] = t;
     for (let i = g.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -45,14 +46,20 @@ export function VisualSearchGame({
   };
 
   useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
+
+  useEffect(() => {
     gen();
     const id = setInterval(() => {
       if (done.current || paused) return;
-      if (Date.now() - start >= duration) {
+      const elapsed = Date.now() - start;
+      setLeftMs(Math.max(0, duration - elapsed));
+      if (elapsed >= duration) {
         done.current = true;
         onComplete({
-          score,
-          won: score >= 80,
+          score: scoreRef.current,
+          won: scoreRef.current >= 80,
           timeMs: Date.now() - start,
           difficulty,
         });
@@ -71,11 +78,11 @@ export function VisualSearchGame({
       setScore(ns);
       onScoreChange?.(ns);
       const nextGrid = [...grid];
-      nextGrid[i] = '#171E28';
+      nextGrid[i] = 'cleared';
       setGrid(nextGrid);
       setFound(nextFound);
       if (nextFound >= needed) gen();
-    } else {
+    } else if (grid[i] !== 'cleared') {
       sfx.wrong(soundEnabled);
       const nl = lives - 1;
       setLives(nl);
@@ -88,36 +95,78 @@ export function VisualSearchGame({
   };
 
   return (
-    <View style={styles.board}>
-      <Text style={styles.status}>
-        Tap all <Text style={{ color: target }}>■■</Text> · Found {found}/{needed} · Score{' '}
-        {score}
-      </Text>
-      <View style={styles.grid}>
-        {range(cells).map((i) => (
-          <Pressable
-            key={i}
-            onPress={() => tap(i)}
-            style={[
-              styles.cell,
-              { width: `${100 / size - 2}%`, backgroundColor: grid[i] ?? '#171E28' },
-            ]}
-          />
-        ))}
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            Tap all matching tiles · {found}/{needed} · {Math.ceil(leftMs / 1000)}s
+          </Text>
+        </HudPill>
+        <View style={styles.targetRow}>
+          <Text style={styles.targetLabel}>Target</Text>
+          <View style={[styles.targetSwatch, { backgroundColor: target }]} />
+        </View>
+        <View style={styles.grid}>
+          {range(cells).map((i) => {
+            const cleared = grid[i] === 'cleared';
+            return (
+              <Pressable
+                key={i}
+                onPress={() => tap(i)}
+                disabled={cleared}
+                style={[
+                  styles.cell,
+                  {
+                    width: `${100 / size}%`,
+                    backgroundColor: cleared ? '#0B0F16' : grid[i] ?? COLORS.surface2,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
       </View>
-    </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
   board: {
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    padding: 14,
+  },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
+  targetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  targetLabel: { color: COLORS.textDim, fontWeight: '600', fontSize: 12 },
+  targetSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  grid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignContent: 'center',
+    justifyContent: 'center',
+  },
+  cell: {
+    aspectRatio: 1,
+    borderRadius: 12,
+    margin: '1%',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    padding: 16,
-    backgroundColor: 'rgba(11,13,18,0.4)',
   },
-  status: { textAlign: 'center', color: '#8B96A8', marginBottom: 14, fontWeight: '600' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  cell: { aspectRatio: 1, borderRadius: 10 },
 });

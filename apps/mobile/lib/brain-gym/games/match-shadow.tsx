@@ -4,17 +4,9 @@ import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
+import { COLORS, HudPill, PlayStage } from './_shared';
 
-const PAIRS: Array<{ solid: string; shadow: string }> = [
-  { solid: '🍎', shadow: '⬛' },
-  { solid: '🚗', shadow: '⬛' },
-  { solid: '🐶', shadow: '⬛' },
-  { solid: '⭐', shadow: '⬛' },
-  { solid: '🏠', shadow: '⬛' },
-  { solid: '🎸', shadow: '⬛' },
-  { solid: '☂️', shadow: '⬛' },
-  { solid: '🦋', shadow: '⬛' },
-];
+const PAIRS = ['🍎', '🚗', '🐶', '⭐', '🏠', '🎸', '☂️', '🦋', '🌙', '⚽'] as const;
 
 export function MatchShadowGame({
   difficulty,
@@ -40,7 +32,7 @@ export function MatchShadowGame({
 
   const pick = (solid: string) => {
     if (paused || done.current) return;
-    if (solid === round.answer.solid) {
+    if (solid === round.answer) {
       sfx.correct(soundEnabled);
       const ns = score + Math.round(35 * difficultyMultiplier(difficulty));
       setScore(ns);
@@ -65,50 +57,85 @@ export function MatchShadowGame({
   };
 
   return (
-    <View style={styles.board}>
-      <Text style={styles.status}>Match the shadow · Round {n}/{needed}</Text>
-      <View style={styles.shadowBox}>
-        <Text style={[styles.shadowEmoji, styles.silhouette]}>{round.answer.solid}</Text>
-        <Text style={styles.hint}>Match this silhouette</Text>
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            Match the silhouette · Round {n}/{needed}
+          </Text>
+        </HudPill>
+
+        <View style={styles.shadowBox}>
+          <Text style={styles.silhouette}>{round.answer}</Text>
+          <Text style={styles.hint}>Which object casts this shadow?</Text>
+        </View>
+
+        <View style={styles.grid}>
+          {round.options.map((o) => (
+            <Pressable
+              key={o}
+              style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
+              onPress={() => pick(o)}
+            >
+              <Text style={styles.emoji}>{o}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
-      <View style={styles.grid}>
-        {round.options.map((o) => (
-          <Pressable key={o.solid} style={styles.cell} onPress={() => pick(o.solid)}>
-            <Text style={styles.emoji}>{o.solid}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
   board: {
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
     padding: 16,
-    backgroundColor: 'rgba(11,13,18,0.4)',
   },
-  status: { textAlign: 'center', color: '#8B96A8', marginBottom: 12, fontWeight: '600' },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
   shadowBox: {
     alignItems: 'center',
-    paddingVertical: 18,
-    marginBottom: 12,
-    backgroundColor: '#0B0E16',
-    borderRadius: 14,
+    justifyContent: 'center',
+    paddingVertical: 28,
+    marginBottom: 16,
+    backgroundColor: '#070A10',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.line,
   },
-  shadowEmoji: { fontSize: 56 },
-  silhouette: { opacity: 0.28, color: '#000' },
-  hint: { color: '#5C6577', marginTop: 6, fontSize: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  silhouette: {
+    fontSize: 72,
+    opacity: 0.22,
+    textShadowColor: '#000',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  hint: { color: COLORS.textDim, marginTop: 10, fontSize: 12 },
+  grid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+    alignContent: 'center',
+  },
   cell: {
-    width: '45%',
+    width: '46%',
+    maxWidth: 180,
     aspectRatio: 1,
-    borderRadius: 14,
-    backgroundColor: '#171E28',
+    borderRadius: 20,
+    backgroundColor: COLORS.surface2,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.line,
   },
-  emoji: { fontSize: 40 },
+  cellPressed: {
+    borderColor: COLORS.purple,
+    backgroundColor: 'rgba(127,119,221,0.18)',
+  },
+  emoji: { fontSize: 48 },
 });

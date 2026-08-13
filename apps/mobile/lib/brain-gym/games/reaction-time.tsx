@@ -145,12 +145,12 @@ export function ReactionTimeGame({
 
 const styles = StyleSheet.create({
   board: {
-    minHeight: 280,
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
   },
-  status: { color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  meta: { color: 'rgba(255,255,255,0.85)', marginTop: 12 },
+  status: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  meta: { color: 'rgba(255,255,255,0.85)', marginTop: 14, fontSize: 15 },
 });

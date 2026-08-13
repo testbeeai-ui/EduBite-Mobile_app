@@ -233,8 +233,8 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   playArea: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
 });

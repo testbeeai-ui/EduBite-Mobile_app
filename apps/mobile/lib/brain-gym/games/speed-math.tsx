@@ -117,29 +117,31 @@ export function SpeedMathGame({
 
 const styles = StyleSheet.create({
   board: {
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     padding: 16,
-    backgroundColor: 'rgba(11,13,18,0.4)',
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    justifyContent: 'center',
   },
   status: { textAlign: 'center', color: '#8B96A8', fontWeight: '600' },
   eq: {
     textAlign: 'center',
     color: '#EAEEF3',
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
-    marginVertical: 20,
+    marginVertical: 28,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
   cell: {
     width: '45%',
-    paddingVertical: 18,
-    borderRadius: 14,
+    paddingVertical: 22,
+    borderRadius: 16,
     backgroundColor: '#171E28',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  opt: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  opt: { color: '#fff', fontSize: 24, fontWeight: '800' },
 });

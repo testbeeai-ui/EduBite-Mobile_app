@@ -128,14 +128,14 @@ export function SequenceMemoryGame({
 
 const styles = StyleSheet.create({
   board: {
+    flex: 1,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.line,
-    backgroundColor: "rgba(11,13,18,0.4)",
+    backgroundColor: "rgba(20,26,35,0.95)",
     padding: 18,
     width: "100%",
-    maxWidth: 380,
-    alignSelf: "center",
+    justifyContent: "center",
   },
   status: {
     textAlign: "center",
@@ -148,6 +148,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     marginHorizontal: -7,
+    maxWidth: 360,
+    alignSelf: "center",
+    width: "100%",
   },
   tileSlot: {
     width: `${100 / 3}%`,
