@@ -4,15 +4,17 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@edubite/ui';
-import { CATEGORY_META, GAMES } from '../../lib/brain-gym/registry';
+import '../../lib/brain-gym/three-native-shim';
+import * as THREE from 'three';
+import { GAMES } from '../../lib/brain-gym/registry';
 import {
   buildHubSceneLayout,
-  HUB_SCENE_CATEGORIES,
-  HUB_SCENE_CATEGORY_COLORS,
+  hubSceneCameraForViewport,
 } from '../../lib/brain-gym/hub-scene-layout';
 import { createHubSceneRenderer } from '../../lib/brain-gym/expo-gl-renderer';
 import { createHubSceneGraph } from '../../lib/brain-gym/hub-scene-three';
@@ -32,19 +34,13 @@ export function BrainGymScene3D() {
   const { progress } = useBrainGym();
   const [failed, setFailed] = useState(false);
   const draggingRef = useRef(false);
-  const rotationYRef = useRef(0);
+  const rotationYRef = useRef(0.55);
   const lastDxRef = useRef(0);
   const disposeRef = useRef<(() => void) | null>(null);
   const startedRef = useRef(false);
-
-  useEffect(() => () => disposeRef.current?.(), []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!startedRef.current) setFailed(true);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
+  const sizeRef = useRef({ width: 360, height: 360 });
+  const chipRefs = useRef<Array<View | null>>([]);
+  const projectScratch = useRef(new THREE.Vector3());
 
   const layout = useMemo(
     () =>
@@ -56,6 +52,15 @@ export function BrainGymScene3D() {
       ),
     [progress.games],
   );
+
+  useEffect(() => () => disposeRef.current?.(), []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!startedRef.current) setFailed(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const pan = useMemo(
     () =>
@@ -80,13 +85,22 @@ export function BrainGymScene3D() {
     [],
   );
 
+  const onLayout = (e: LayoutChangeEvent) => {
+    sizeRef.current = {
+      width: e.nativeEvent.layout.width,
+      height: e.nativeEvent.layout.height,
+    };
+  };
+
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
     try {
       startedRef.current = true;
       const { renderer } = createHubSceneRenderer(gl);
-      const { scene, camera, root, dispose } = createHubSceneGraph(layout);
-      camera.aspect = gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight);
-      camera.updateProjectionMatrix();
+      const pose = hubSceneCameraForViewport(sizeRef.current.height);
+      const { scene, camera, root, labelAnchors, dispose } = createHubSceneGraph(
+        layout,
+        pose,
+      );
 
       let raf = 0;
       let alive = true;
@@ -94,8 +108,38 @@ export function BrainGymScene3D() {
         if (!alive) return;
         if (!draggingRef.current) rotationYRef.current += 0.0008;
         root.rotation.y = rotationYRef.current;
+
+        const fitted = hubSceneCameraForViewport(sizeRef.current.height);
+        camera.fov = fitted.fov;
+        camera.position.set(...fitted.position);
+        camera.lookAt(...fitted.target);
+        camera.aspect = gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight);
+        camera.updateProjectionMatrix();
+
         renderer.render(scene, camera);
         gl.endFrameEXP();
+
+        const { width, height } = sizeRef.current;
+        const world = projectScratch.current;
+        const chipW = 96;
+        labelAnchors.forEach((anchor, i) => {
+          const node = chipRefs.current[i];
+          if (!node) return;
+          anchor.object.getWorldPosition(world);
+          world.project(camera);
+          const x = (world.x * 0.5 + 0.5) * width;
+          const y = (-world.y * 0.5 + 0.5) * height;
+          const onScreen =
+            world.z < 1 && x > 8 && x < width - 8 && y > 8 && y < height - 8;
+          node.setNativeProps({
+            style: {
+              left: Math.min(Math.max(x - chipW / 2, 4), width - chipW - 4),
+              top: Math.min(Math.max(y - 12, 4), height - 28),
+              opacity: onScreen ? 1 : 0,
+            },
+          });
+        });
+
         raf = requestAnimationFrame(tick);
       };
       tick();
@@ -115,71 +159,48 @@ export function BrainGymScene3D() {
   if (failed) return <HeroCubeFallback />;
 
   return (
-    <View style={styles.root} {...pan.panHandlers}>
+    <View style={styles.root} onLayout={onLayout} {...pan.panHandlers}>
       <GLView
         style={StyleSheet.absoluteFill}
         msaaSamples={0}
         onContextCreate={onContextCreate}
       />
-      <View pointerEvents="none" style={styles.centerLabel}>
-        <Text style={styles.centerLabelText}>BRAIN{'\n'}GYM</Text>
-      </View>
-      <View pointerEvents="none" style={styles.legend}>
-        {HUB_SCENE_CATEGORIES.map((cat) => (
-          <View
-            key={cat}
-            style={[styles.legendChip, { borderColor: HUB_SCENE_CATEGORY_COLORS[cat] }]}
-          >
-            <Text style={styles.legendText}>
-              {CATEGORY_META[cat].emoji} {CATEGORY_META[cat].label}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {layout.clusters.map((cluster, i) => (
+        <View
+          key={cluster.category}
+          ref={(node) => {
+            chipRefs.current[i] = node;
+          }}
+          pointerEvents="none"
+          style={styles.clusterChip}
+        >
+          <Text style={styles.clusterChipText}>
+            {cluster.emoji} {cluster.label}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  centerLabel: {
+  clusterChip: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerLabelText: {
-    color: '#fff',
-    fontWeight: '900',
-    fontSize: 13,
-    letterSpacing: 1.2,
-    textAlign: 'center',
-    lineHeight: 15,
-    textShadowColor: 'rgba(0,0,0,0.65)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  legend: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'center',
-  },
-  legendChip: {
-    borderWidth: 1,
+    left: -200,
+    top: -200,
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: 'rgba(15,23,42,0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(15,23,42,0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
-  legendText: { color: '#f8fafc', fontSize: 11, fontWeight: '700' },
+  clusterChipText: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   fallbackWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fallbackCube: {
     width: 88,

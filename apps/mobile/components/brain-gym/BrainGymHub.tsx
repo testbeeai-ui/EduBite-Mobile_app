@@ -58,31 +58,37 @@ export function BrainGymHub() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroScene}>
-          {!activeGameId ? <BrainGymScene3D /> : null}
+        <View style={styles.heroCard}>
+          <View style={styles.heroScene} pointerEvents="auto">
+            {!activeGameId ? <BrainGymScene3D /> : null}
+          </View>
+          <View style={styles.heroOverlay} pointerEvents="box-none">
+            <Text style={styles.eyebrow} pointerEvents="none">
+              FUNCTION 03 · GO DEEPER
+            </Text>
+            <Text style={styles.title} pointerEvents="none">
+              Brain Gym
+            </Text>
+            <View style={styles.statPills} pointerEvents="none">
+              <View style={styles.statPill}>
+                <Text style={styles.statPillText}>🔥 {progress.streak}d streak</Text>
+              </View>
+              <View style={styles.statPill}>
+                <Text style={styles.statPillText}>🏆 {progress.totalWins} wins</Text>
+              </View>
+              <View style={styles.statPill}>
+                <Text style={styles.statPillText}>
+                  ▶ {progress.totalPlays} plays
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.desc} pointerEvents="none">
+              15 mini-games — memory, logic, visual & speed.
+            </Text>
+          </View>
         </View>
 
         <View style={styles.pad}>
-          <Text style={styles.eyebrow}>FUNCTION 03 · GO DEEPER</Text>
-          <Text style={styles.title}>Brain Gym</Text>
-          <View style={styles.statPills}>
-            <View style={styles.statPill}>
-              <Text style={styles.statPillText}>🔥 {progress.streak}d streak</Text>
-            </View>
-            <View style={styles.statPill}>
-              <Text style={styles.statPillText}>🏆 {progress.totalWins} wins</Text>
-            </View>
-            <View style={styles.statPill}>
-              <Text style={styles.statPillText}>
-                ▶ {progress.totalPlays} plays
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.desc}>
-            15 mini-games — memory, logic, visual & speed. Play on-device. Progress
-            saves to your Brain Gym DB.
-          </Text>
-
           <View style={styles.tabs}>
             {(
               [
@@ -297,10 +303,27 @@ function GameCard({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bg },
   content: { paddingBottom: 40 },
-  heroScene: {
-    height: 248,
+  heroCard: {
+    height: 400,
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(127,119,221,0.2)',
     backgroundColor: '#0b1220',
+  },
+  heroScene: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  heroOverlay: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   pad: { paddingHorizontal: 16 },
   eyebrow: {
@@ -314,6 +337,9 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     marginTop: 4,
+    textShadowColor: 'rgba(0,0,0,0.65)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   desc: {
     color: theme.colors.textDim,
@@ -323,7 +349,7 @@ const styles = StyleSheet.create({
   },
   statPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   statPill: {
-    backgroundColor: theme.colors.cardHi,
+    backgroundColor: 'rgba(15,23,42,0.72)',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,

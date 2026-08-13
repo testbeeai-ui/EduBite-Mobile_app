@@ -10,7 +10,8 @@ export type ExpoGlCanvas = {
   clientHeight: number;
   addEventListener: () => void;
   removeEventListener: () => void;
-  getContext: () => ExpoWebGLRenderingContext;
+  setAttribute: () => void;
+  getContext: (type?: string) => ExpoWebGLRenderingContext | null;
 };
 
 export function createExpoGlCanvas(gl: ExpoWebGLRenderingContext): ExpoGlCanvas {
@@ -24,7 +25,14 @@ export function createExpoGlCanvas(gl: ExpoWebGLRenderingContext): ExpoGlCanvas 
     clientHeight: height,
     addEventListener: () => {},
     removeEventListener: () => {},
-    getContext: () => gl,
+    setAttribute: () => {},
+    // THREE r163+ throws if a passed context is instanceof WebGLRenderingContext.
+    // Expo's WebGL2 context inherits that prototype, so we never pass `context`
+    // and only answer getContext('webgl2').
+    getContext: (type?: string) => {
+      if (type && type !== 'webgl2') return null;
+      return gl;
+    },
   };
 }
 
@@ -34,7 +42,6 @@ export function createHubSceneRenderer(gl: ExpoWebGLRenderingContext) {
 
   const renderer = new THREE.WebGLRenderer({
     canvas: canvas as unknown as HTMLCanvasElement,
-    context: gl,
     antialias: false,
     alpha: false,
     powerPreference: 'low-power',

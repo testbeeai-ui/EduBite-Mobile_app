@@ -1,4 +1,7 @@
+import { CATEGORY_META } from './registry';
 import type { GameCategory } from './types';
+
+export type HubSceneVec3 = [number, number, number];
 
 export const HUB_SCENE_CATEGORIES: GameCategory[] = [
   'memory',
@@ -14,13 +17,20 @@ export const HUB_SCENE_CATEGORY_COLORS: Record<GameCategory, string> = {
   speed: '#fbbf24',
 };
 
+/** Edubite web canvas height in brain-gym-scene-3d.tsx */
+export const HUB_SCENE_WEB_HEIGHT = 400;
+
+export const HUB_SCENE_WEB_CAMERA = {
+  position: [0, 4.2, 11.2] as HubSceneVec3,
+  fov: 42,
+  target: [0, 0.15, 0] as HubSceneVec3,
+};
+
 export type HubSceneGameInput = {
   id: string;
   color: string;
   category: GameCategory;
 };
-
-export type HubSceneVec3 = [number, number, number];
 
 export type HubSceneGameNode = {
   id: string;
@@ -33,6 +43,8 @@ export type HubSceneCluster = {
   category: GameCategory;
   center: HubSceneVec3;
   color: string;
+  emoji: string;
+  label: string;
   games: HubSceneGameNode[];
 };
 
@@ -47,6 +59,26 @@ export type HubSceneLayout = {
   clusters: HubSceneCluster[];
   particles: HubSceneParticle[];
 };
+
+export type HubSceneCamera = {
+  position: HubSceneVec3;
+  fov: number;
+  target: HubSceneVec3;
+};
+
+export function hubSceneCameraForViewport(height: number): HubSceneCamera {
+  const scale = HUB_SCENE_WEB_HEIGHT / Math.max(height, 1);
+  const t = Math.min(Math.max(scale, 1), 1.75);
+  return {
+    position: [
+      0,
+      HUB_SCENE_WEB_CAMERA.position[1] * t,
+      HUB_SCENE_WEB_CAMERA.position[2] * t,
+    ],
+    fov: HUB_SCENE_WEB_CAMERA.fov,
+    target: HUB_SCENE_WEB_CAMERA.target,
+  };
+}
 
 export function buildHubSceneLayout(
   games: HubSceneGameInput[],
@@ -68,6 +100,8 @@ export function buildHubSceneLayout(
     return {
       category,
       color: HUB_SCENE_CATEGORY_COLORS[category],
+      emoji: CATEGORY_META[category].emoji,
+      label: CATEGORY_META[category].label,
       center: [
         Math.cos(angle) * radius,
         0,

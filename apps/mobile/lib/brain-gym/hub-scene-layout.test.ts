@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   buildHubSceneLayout,
+  hubSceneCameraForViewport,
   HUB_SCENE_CATEGORIES,
   HUB_SCENE_CATEGORY_COLORS,
+  HUB_SCENE_WEB_CAMERA,
 } from './hub-scene-layout';
 
 const SAMPLE_GAMES = [
@@ -50,5 +52,26 @@ describe('buildHubSceneLayout', () => {
     const layout = buildHubSceneLayout(SAMPLE_GAMES, {});
     assert.equal(layout.particles.length, 16);
     assert.equal(layout.center.size[0], 2.2);
+  });
+
+  it('keeps Memory/Logic/Visual/Speed labels from the Edubite hub', () => {
+    const layout = buildHubSceneLayout(SAMPLE_GAMES, {});
+    assert.deepEqual(
+      layout.clusters.map((c) => c.label),
+      ['Memory', 'Logic', 'Visual', 'Speed'],
+    );
+  });
+});
+
+describe('hubSceneCameraForViewport', () => {
+  it('uses the web camera when the hero is the 400px Edubite canvas height', () => {
+    const cam = hubSceneCameraForViewport(400);
+    assert.deepEqual(cam.position, [0, 4.2, 11.2]);
+  });
+
+  it('pulls the camera back on a shorter phone hero so the four islands stay in frame', () => {
+    const cam = hubSceneCameraForViewport(248);
+    assert.ok(cam.position[2] > HUB_SCENE_WEB_CAMERA.position[2]);
+    assert.ok(cam.position[1] > HUB_SCENE_WEB_CAMERA.position[1]);
   });
 });
