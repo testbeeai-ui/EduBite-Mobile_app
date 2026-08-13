@@ -7,11 +7,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@edubite/ui';
 import { CATEGORY_META, GAMES, getGame } from '../../lib/brain-gym/registry';
 import { useBrainGym } from '../../lib/brain-gym/hooks/useBrainGym';
 import type { GameCategory, GameId } from '../../lib/brain-gym/types';
+import { BrainGymScene3D } from './BrainGymScene3D';
 import { GameShell } from './GameShell';
 
 const FILTERS: Array<'All' | GameCategory> = [
@@ -23,7 +23,8 @@ const FILTERS: Array<'All' | GameCategory> = [
 ];
 
 export function BrainGymHub() {
-  const { progress, openGame, hubTab, setHubTab, toggleFav } = useBrainGym();
+  const { progress, openGame, hubTab, setHubTab, toggleFav, activeGameId } =
+    useBrainGym();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All');
   const [query, setQuery] = useState('');
 
@@ -58,18 +59,7 @@ export function BrainGymHub() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroScene}>
-          <LinearGradient
-            colors={['rgba(127,119,221,0.22)', '#0B0E16']}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.heroCubeWrap}>
-            <LinearGradient
-              colors={[theme.colors.purple, '#4a44a8']}
-              style={styles.heroCube}
-            >
-              <Text style={styles.heroCubeText}>BRAIN{'\n'}GYM</Text>
-            </LinearGradient>
-          </View>
+          {!activeGameId ? <BrainGymScene3D /> : null}
         </View>
 
         <View style={styles.pad}>
@@ -308,25 +298,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bg },
   content: { paddingBottom: 40 },
   heroScene: {
-    height: 160,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 248,
     overflow: 'hidden',
-  },
-  heroCubeWrap: { transform: [{ rotate: '8deg' }] },
-  heroCube: {
-    width: 88,
-    height: 88,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroCubeText: {
-    color: '#fff',
-    fontWeight: '900',
-    textAlign: 'center',
-    fontSize: 14,
-    lineHeight: 16,
+    backgroundColor: '#0b1220',
   },
   pad: { paddingHorizontal: 16 },
   eyebrow: {

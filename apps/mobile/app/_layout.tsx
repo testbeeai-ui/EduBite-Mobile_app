@@ -13,6 +13,7 @@ import { AppHeader, PhoneShell, theme } from '@edubite/ui';
 import { LoginGate } from '../components/auth/LoginGate';
 import { NotificationsPanel } from '../components/NotificationsPanel';
 import { AuthProvider, useAuth } from '../lib/auth/AuthProvider';
+import { SKIP_LOGIN_FOR_PREVIEW } from '../lib/auth/dev-preview';
 import { GameProvider, useGame } from '../lib/game/GameProvider';
 
 const QUICK_LINKS: Array<{ label: string; route: string }> = [
@@ -74,7 +75,9 @@ function AppShell() {
           <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.drawerTitle}>Edubite</Text>
             <Text style={styles.drawerSub}>
-              {state.rdm} RDM · {state.streak} day streak
+              {SKIP_LOGIN_FOR_PREVIEW
+                ? 'Preview · login off'
+                : `${state.rdm} RDM · ${state.streak} day streak`}
             </Text>
             {QUICK_LINKS.map((link) => (
               <TouchableOpacity
@@ -112,7 +115,7 @@ function RootGate() {
     return <Slot />;
   }
 
-  if (loading) {
+  if (!SKIP_LOGIN_FOR_PREVIEW && loading) {
     return (
       <View style={styles.boot}>
         <ActivityIndicator color={theme.colors.purple} size="large" />
@@ -121,7 +124,7 @@ function RootGate() {
     );
   }
 
-  if (!isGoogleUser) {
+  if (!SKIP_LOGIN_FOR_PREVIEW && !isGoogleUser) {
     return <LoginGate />;
   }
 

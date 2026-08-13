@@ -61,7 +61,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.edubite-pending-ios-client"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "router": {},
