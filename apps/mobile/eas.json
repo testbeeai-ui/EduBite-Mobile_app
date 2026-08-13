@@ -16,11 +16,17 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "167530443868-kniil90rorooo9i3vu80sqmtlo3sqqi2.apps.googleusercontent.com"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "167530443868-kniil90rorooo9i3vu80sqmtlo3sqqi2.apps.googleusercontent.com"
+      },
       "android": {
         "buildType": "app-bundle"
       }

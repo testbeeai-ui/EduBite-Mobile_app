@@ -6,6 +6,7 @@ import {
   mapGoogleIdTokenSignIn,
   type GoogleIdTokenSignInResult,
 } from './google-id-token-result';
+import { signInWithGoogleBrowser } from './google-browser-sign-in';
 import { isRunningInExpoGo } from './runtime';
 
 export type GoogleSignInResult = GoogleIdTokenSignInResult;
@@ -45,21 +46,18 @@ function ensureGoogleConfigured(GoogleSignin: GoogleSignInNative['GoogleSignin']
   return webClientId;
 }
 
-const DEV_BUILD_REQUIRED_MESSAGE =
-  'Google Sign-In needs a development build (Expo Go cannot load native Google Sign-In). Run: cd apps/mobile && npx eas build --profile development --platform android — then open that app, not Expo Go.';
-
 /**
- * Native Google Sign-In → Supabase session via ID token.
- * Requires a development / production build (not Expo Go).
+ * Google → Supabase session.
+ * - Development / production builds: native ID token (preferred)
+ * - Expo Go: browser PKCE OAuth fallback
  *
- * Note: @react-native-google-signin/google-signin Original API does not
- * attach a custom nonce. Enable Supabase Google → "Skip nonce check" until
- * a nonce-capable native path is used.
+ * Note: native Original API does not attach a custom nonce. Enable Supabase
+ * Google → "Skip nonce check" for the ID-token path.
  */
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   if (isRunningInExpoGo()) {
-    console.warn('[auth] blocked — Expo Go has no RNGoogleSignin native module');
-    return { ok: false, error: DEV_BUILD_REQUIRED_MESSAGE };
+    console.info('[auth] Expo Go — using browser Google OAuth');
+    return signInWithGoogleBrowser();
   }
 
   console.info('[auth] starting native Google Sign-In', { platform: Platform.OS });
@@ -122,7 +120,8 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     const message =
       error instanceof Error ? error.message : 'Google Sign-In failed.';
     if (message.includes('RNGoogleSignin') || message.includes('TurboModuleRegistry')) {
-      return { ok: false, error: DEV_BUILD_REQUIRED_MESSAGE };
+      console.warn('[auth] native module missing — falling back to browser OAuth');
+      return signInWithGoogleBrowser();
     }
 
     try {
