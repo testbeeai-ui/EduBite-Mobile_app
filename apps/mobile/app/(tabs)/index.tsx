@@ -1,17 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { theme } from '@edubite/ui';
+import { MonthlyChallengeInfoModal } from '../../components/challenge/MonthlyChallengeInfoModal';
+import {
+  buildChallengeProgress,
+  formatRdm,
+  getChallengeMonthMeta,
+  getEntryState,
+  getMonthlyChallengeTargetRdm,
+  isEnrolledForChallengeMonth,
+  MONTHLY_CHALLENGE_STREAK_REQUIRED,
+} from '../../lib/challenge/monthly';
+import { useAuth } from '../../lib/auth/AuthProvider';
 import { useGame } from '../../lib/game/GameProvider';
-import { addDaysToKey, daysBetween, monthKey, parseDateKey, todayKey } from '../../lib/game/date';
+import { addDaysToKey, daysBetween, parseDateKey, todayKey } from '../../lib/game/date';
 import { isFullDay } from '../../lib/game/state';
 import type { DayCriteria } from '../../lib/game/types';
-
-function monthLabel(dateKey: string): string {
-  const d = parseDateKey(dateKey);
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
 
 function criteriaDots(log?: DayCriteria | null) {
   return [
@@ -23,24 +29,54 @@ function criteriaDots(log?: DayCriteria | null) {
   ];
 }
 
+function displayNameFromUser(user: {
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+} | null): string {
+  const meta = user?.user_metadata ?? {};
+  const full =
+    (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+    (typeof meta.name === 'string' && meta.name.trim()) ||
+    '';
+  if (full) return full.slice(0, 80);
+  const email = user?.email?.trim();
+  if (email) return (email.split('@')[0] ?? 'Learner').slice(0, 40);
+  return 'Learner';
+}
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { state, rewardMap, level, criteria, enrollMonthlyChallenge, saving } = useGame();
   const [enrolling, setEnrolling] = useState(false);
+  const [showChallengeInfo, setShowChallengeInfo] = useState(false);
 
   const today = todayKey();
   const userRdm = state.rdm ?? 0;
-  const targetRdm = rewardMap['challenge.target_rdm']?.amount ?? 5000;
+  const targetRdm = getMonthlyChallengeTargetRdm(rewardMap);
+  const meta = useMemo(() => getChallengeMonthMeta(today), [today]);
+  const entryState = getEntryState({
+    rdm: userRdm,
+    dateKey: today,
+    enrolledMonthKey: state.challengeEnrolledMonthKey,
+    enrolledMonths: state.challengeEnrolledMonths,
+    rewardMap,
+  });
+  const enrolled = isEnrolledForChallengeMonth(
+    meta.monthKey,
+    state.challengeEnrolledMonthKey,
+    state.challengeEnrolledMonths,
+  );
+  const challengeProgress = useMemo(
+    () => buildChallengeProgress(state, today),
+    [state, today],
+  );
   const currentStreak = state.streak ?? 0;
   const habitsChecked = state.habits.filter((h) => h.done).length;
   const habitsTotal = state.habits.length || 8;
-  const mk = monthKey(today);
-  const enrolled =
-    state.challengeEnrolledMonthKey === mk ||
-    (state.challengeEnrolledMonths || []).includes(mk);
-  const unlocked = userRdm >= targetRdm;
   const challengeProgressPct = Math.min(100, Math.floor((userRdm / Math.max(1, targetRdm)) * 100));
   const ringProgress = Math.min(1, level.progress / 100);
+  const monthTitle = `${meta.monthLabel} ${meta.year}`;
 
   const weekDays = useMemo(() => {
     const start = state.joinedDate || today;
@@ -83,15 +119,23 @@ export default function HomeScreen() {
   const todayDots = criteriaDots(criteria);
   const criteriaDoneCount = todayDots.filter((d) => d.on).length;
 
-  const handleChallengePress = async () => {
-    if (!unlocked) return;
-    if (enrolled) return;
-    setEnrolling(true);
-    try {
-      await enrollMonthlyChallenge(level.current.name);
-    } finally {
-      setEnrolling(false);
+  const openChallenge = async () => {
+    if (entryState === 'open' && !enrolled) {
+      setEnrolling(true);
+      try {
+        const result = await enrollMonthlyChallenge(displayNameFromUser(user));
+        if (!result.ok) {
+          Alert.alert(
+            'Could not enter',
+            result.error ?? 'Could not enter Monthly Challenge. Please try again.',
+          );
+          return;
+        }
+      } finally {
+        setEnrolling(false);
+      }
     }
+    router.navigate('/challenge');
   };
 
   const heatColor = (pillarCount: number, full: boolean) => {
@@ -100,6 +144,38 @@ export default function HomeScreen() {
     if (pillarCount >= 1) return 'rgba(29,158,117,0.35)';
     return '#1B2330';
   };
+
+  const challengeSubtitle = (() => {
+    switch (entryState) {
+      case 'open':
+        return enrolled
+          ? `You're in for ${monthTitle} — stake already paid.`
+          : `${monthTitle} unlocked — enter once to join (entry stake applies).`;
+      case 'locked_window':
+        return `Opens ${meta.nextEntryOpensLabel} — each month is a fresh entry + stake`;
+      case 'locked_rdm':
+        return `Reach ${formatRdm(targetRdm)} RDM to unlock ${meta.monthLabel}`;
+      default: {
+        const _exhaustive: never = entryState;
+        return _exhaustive;
+      }
+    }
+  })();
+
+  const challengeBadge = (() => {
+    switch (entryState) {
+      case 'open':
+        return enrolled ? '✓ Joined' : 'Open';
+      case 'locked_window':
+        return 'Closed';
+      case 'locked_rdm':
+        return '🔒 Locked';
+      default: {
+        const _exhaustive: never = entryState;
+        return _exhaustive;
+      }
+    }
+  })();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
@@ -147,61 +223,76 @@ export default function HomeScreen() {
             <Text style={styles.chalIconText}>🏆</Text>
           </View>
           <View style={styles.chalInfo}>
-            <Text style={styles.chalTitle}>{monthLabel(today)} Challenge</Text>
-            <Text style={styles.chalSub}>
-              {enrolled
-                ? 'You are enrolled — keep your streak strong this month.'
-                : unlocked
-                  ? `Unlocked — enroll to join ${monthLabel(today)}.`
-                  : `Reach ${targetRdm.toLocaleString()} RDM to unlock`}
-            </Text>
+            <Text style={styles.chalTitle}>{monthTitle} Challenge</Text>
+            <Text style={styles.chalSub}>{challengeSubtitle}</Text>
           </View>
           <View style={styles.lockPill}>
-            <Text style={styles.lockPillText}>
-              {enrolled ? '✓ Enrolled' : unlocked ? 'Open' : '🔒 Locked'}
-            </Text>
+            <Text style={styles.lockPillText}>{challengeBadge}</Text>
           </View>
         </View>
 
-        {!enrolled ? (
+        {entryState === 'locked_rdm' ? (
           <>
             <View style={styles.chalProgRow}>
               <Text style={styles.chalProgText}>Progress to unlock</Text>
               <Text style={styles.chalProgValue}>
-                {userRdm.toLocaleString()} / {targetRdm.toLocaleString()} RDM
+                {formatRdm(userRdm)} / {formatRdm(targetRdm)} RDM
               </Text>
             </View>
             <View style={styles.chalTrack}>
               <View style={[styles.chalFill, { width: `${challengeProgressPct}%` }]} />
             </View>
           </>
-        ) : (
+        ) : enrolled ? (
           <View style={styles.chalProgRow}>
-            <Text style={styles.chalProgText}>Month progress</Text>
+            <Text style={styles.chalProgText}>Challenge streak</Text>
             <Text style={styles.chalProgValue}>
-              {journeyFull} full days · {currentStreak} streak
+              {challengeProgress.currentStretch}/{MONTHLY_CHALLENGE_STREAK_REQUIRED} · best{' '}
+              {challengeProgress.bestStretch}
             </Text>
           </View>
+        ) : null}
+
+        {entryState === 'open' ? (
+          <TouchableOpacity
+            style={styles.learnBtn}
+            disabled={enrolling || saving}
+            onPress={() => void openChallenge()}
+          >
+            <Text style={styles.learnBtnText}>
+              {enrolling
+                ? 'Enrolling…'
+                : enrolled
+                  ? '🏆 Continue Challenge'
+                  : '🏆 Enter Challenge'}
+            </Text>
+          </TouchableOpacity>
+        ) : entryState === 'locked_window' ? (
+          <TouchableOpacity style={styles.lockedBtn} onPress={() => router.navigate('/challenge')}>
+            <Text style={styles.lockedBtnText}>
+              {monthTitle} opens {meta.nextEntryOpensLabel}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.lockedBtn} onPress={() => router.navigate('/challenge')}>
+            <Text style={styles.lockedBtnText}>
+              Reach {formatRdm(targetRdm)} RDM to unlock {meta.monthLabel}
+            </Text>
+          </TouchableOpacity>
         )}
 
         <TouchableOpacity
-          style={styles.learnBtn}
-          disabled={enrolling || saving || (!unlocked && !enrolled)}
-          onPress={() => {
-            if (unlocked && !enrolled) void handleChallengePress();
-          }}
+          style={styles.infoBtn}
+          onPress={() => setShowChallengeInfo(true)}
         >
-          <Text style={styles.learnBtnText}>
-            {enrolled
-              ? 'ⓘ Enrolled — keep completing all 5 pillars'
-              : unlocked
-                ? enrolling
-                  ? 'Enrolling…'
-                  : 'Enter monthly challenge'
-                : 'ⓘ Reach target RDM to unlock'}
-          </Text>
+          <Text style={styles.infoBtnText}>ⓘ Learn How? — Conditions & Benefits</Text>
         </TouchableOpacity>
       </View>
+
+      <MonthlyChallengeInfoModal
+        open={showChallengeInfo}
+        onClose={() => setShowChallengeInfo(false)}
+      />
 
       <View style={styles.card}>
         <View style={styles.ccHead}>
@@ -459,8 +550,28 @@ const styles = StyleSheet.create({
   chalProgValue: { fontSize: 11, fontWeight: '700', color: theme.colors.textDim, fontFamily: theme.fonts.body },
   chalTrack: { height: 6, borderRadius: 99, backgroundColor: theme.colors.cardHi, marginTop: 6, overflow: 'hidden' },
   chalFill: { width: '0%', height: '100%', borderRadius: 99, backgroundColor: theme.colors.purple },
-  learnBtn: { marginTop: 12, padding: 11, borderRadius: 12, backgroundColor: 'rgba(127,119,221,0.06)', borderColor: 'rgba(127,119,221,0.3)', borderWidth: 1, alignItems: 'center' },
-  learnBtnText: { color: theme.colors.purple, fontSize: 12, fontWeight: '700', fontFamily: theme.fonts.body },
+  learnBtn: { marginTop: 12, padding: 11, borderRadius: 12, backgroundColor: 'rgba(127,119,221,0.18)', borderColor: 'rgba(127,119,221,0.35)', borderWidth: 1, alignItems: 'center' },
+  learnBtnText: { color: '#AFA9EC', fontSize: 12, fontWeight: '700' },
+  lockedBtn: {
+    marginTop: 12,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,159,39,0.08)',
+    borderColor: 'rgba(239,159,39,0.3)',
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  lockedBtnText: { color: theme.colors.amber, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  infoBtn: {
+    marginTop: 8,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: 'rgba(127,119,221,0.06)',
+    borderColor: 'rgba(127,119,221,0.28)',
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  infoBtnText: { color: theme.colors.purple, fontSize: 11.5, fontWeight: '600' },
 
   ccHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   ccHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 9 },

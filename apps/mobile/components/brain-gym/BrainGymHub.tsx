@@ -252,9 +252,9 @@ export function BrainGymHub() {
           {hubTab === 'leaderboard' ? (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Ranks</Text>
-              <Text style={styles.cardBody}>
-                Personal bests sync to your Brain Gym progress row. Global
-                leaderboard uses the same Edubite DB when available.
+                  <Text style={styles.cardBody}>
+                Personal bests from your synced Brain Gym progress. Global
+                multiplayer ranks are not live yet (same as Edubite web).
               </Text>
               {[...GAMES]
                 .sort(

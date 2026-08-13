@@ -12,8 +12,11 @@ import { useAuth } from '../auth/AuthProvider';
 import {
   enrollMonthlyChallenge as enrollMonthlyChallengeRpc,
   fetchEdubiteRewards,
+  fetchMonthlyChallengeEnrollmentMonths,
+  fetchOwnMonthlyChallengeEntry,
   fetchUserGameState,
   saveGameState,
+  submitMonthlyChallenge as submitMonthlyChallengeRpc,
 } from '../supabase';
 import { monthKey, todayKey } from './date';
 import { hydrateGameState, toPersistable } from './hydrate';
@@ -29,6 +32,10 @@ import {
 } from './state';
 import type { GameState } from './types';
 import type { PledgeType } from '../pledge/constants';
+import {
+  mergeEnrolledMonths,
+  withChallengeRemoteSync,
+} from '../challenge/monthly';
 
 type RewardMap = Record<string, { amount?: number; label?: string }>;
 
@@ -59,7 +66,17 @@ type GameContextValue = {
   startFunbrain: () => void;
   resetDose: () => void;
   resetFunbrain: () => void;
-  enrollMonthlyChallenge: (displayName?: string) => Promise<boolean>;
+  enrollMonthlyChallenge: (displayName?: string) => Promise<{
+    ok: boolean;
+    error?: string;
+  }>;
+  submitMonthlyChallenge: (args: {
+    answer: string;
+    displayName?: string;
+  }) => Promise<{ ok: boolean; error?: string; message?: string }>;
+  markChallengePuzzleSubmitted: (monthKey: string) => void;
+  /** Quiet roster/submission pull — no full-screen loading flash. */
+  syncChallengeRemote: () => Promise<void>;
   markNotificationRead: (id: string) => void;
   clearNotification: (id: string) => void;
 };
@@ -139,9 +156,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      const [rewards, row] = await Promise.all([
+      const mk = monthKey();
+      const [rewards, row, rosterMonths, ownEntry] = await Promise.all([
         fetchEdubiteRewards(),
         fetchUserGameState(),
+        fetchMonthlyChallengeEnrollmentMonths(),
+        fetchOwnMonthlyChallengeEntry(mk),
       ]);
       const map: RewardMap = {};
       rewards.forEach((r) => {
@@ -152,7 +172,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         (row?.payload ?? null) as Record<string, unknown> | null,
         map,
       );
-      setState(withDerived(rollDayIfNeeded(hydrated)));
+      const synced = withChallengeRemoteSync(hydrated, {
+        rosterMonths,
+        submittedMonthKey: ownEntry ? mk : null,
+      });
+      setState(withDerived(rollDayIfNeeded(synced)));
     } catch (err) {
       console.warn('[game] refetch failed', err);
     } finally {
@@ -163,6 +187,29 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  const syncChallengeRemote = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const session = await ensureSilentSession();
+      if (!session.user) return;
+      const mk = monthKey();
+      const [rosterMonths, ownEntry] = await Promise.all([
+        fetchMonthlyChallengeEnrollmentMonths(),
+        fetchOwnMonthlyChallengeEntry(mk),
+      ]);
+      setState((prev) =>
+        withDerived(
+          withChallengeRemoteSync(prev, {
+            rosterMonths,
+            submittedMonthKey: ownEntry ? mk : null,
+          }),
+        ),
+      );
+    } catch (err) {
+      console.warn('[game] challenge remote sync failed', err);
+    }
+  }, [user?.id]);
 
   const completeDose: GameContextValue['completeDose'] = useCallback(
     async ({ classLevel, answers, correct, total }) => {
@@ -354,23 +401,68 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         displayName,
         dateKey: todayKey(),
       });
-      if (!result) return false;
+      if (!result.ok) return { ok: false, error: result.error };
+
       const payload =
-        (result.state as Record<string, unknown> | undefined) ?? result;
+        (result.data?.state as Record<string, unknown> | undefined) ??
+        result.data ??
+        null;
       if (payload && typeof payload === 'object' && 'rdm' in payload) {
         setState(withDerived(hydrateGameState(payload, rewardMap)));
-        return true;
+        return { ok: true };
       }
       apply((prev) => ({
         ...prev,
         challengeEnrolledMonthKey: mk,
-        challengeEnrolledMonths: Array.from(
-          new Set([...(prev.challengeEnrolledMonths || []), mk]),
+        challengeEnrolledMonths: mergeEnrolledMonths(
+          prev.challengeEnrolledMonths,
+          prev.challengeEnrolledMonthKey,
+          mk,
         ),
       }));
-      return true;
+      return { ok: true };
     },
     [apply, rewardMap],
+  );
+
+  const submitMonthlyChallenge = useCallback(
+    async (args: { answer: string; displayName?: string }) => {
+      const mk = monthKey();
+      const result = await submitMonthlyChallengeRpc({
+        monthKey: mk,
+        answer: args.answer,
+        displayName: args.displayName ?? 'Edubite Learner',
+        dateKey: todayKey(),
+      });
+      if (!result.ok) return { ok: false, error: result.error };
+
+      const payload =
+        (result.data?.state as Record<string, unknown> | undefined) ?? null;
+      if (payload && typeof payload === 'object') {
+        setState(withDerived(hydrateGameState(payload, rewardMap)));
+      } else {
+        apply((prev) => ({
+          ...prev,
+          challengePuzzleSubmittedMonthKey: mk,
+        }));
+      }
+      return {
+        ok: true,
+        message:
+          'Entry recorded. Edubite will verify correctness and notify winners on WhatsApp and email.',
+      };
+    },
+    [apply, rewardMap],
+  );
+
+  const markChallengePuzzleSubmitted = useCallback(
+    (mk: string) => {
+      apply((prev) => ({
+        ...prev,
+        challengePuzzleSubmittedMonthKey: mk,
+      }));
+    },
+    [apply],
   );
 
   const markNotificationRead = useCallback((id: string) => {
@@ -409,6 +501,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       resetDose,
       resetFunbrain,
       enrollMonthlyChallenge,
+      submitMonthlyChallenge,
+      markChallengePuzzleSubmitted,
+      syncChallengeRemote,
       markNotificationRead,
       clearNotification,
     }),
@@ -429,6 +524,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       resetDose,
       resetFunbrain,
       enrollMonthlyChallenge,
+      submitMonthlyChallenge,
+      markChallengePuzzleSubmitted,
+      syncChallengeRemote,
       markNotificationRead,
       clearNotification,
     ],

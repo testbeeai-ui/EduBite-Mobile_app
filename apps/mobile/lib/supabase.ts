@@ -395,12 +395,18 @@ export async function fetchInspirationRoleModels(): Promise<InspirationRoleModel
   }
 }
 
-/** Learner enroll into monthly challenge (no admin UI). */
+export type ChallengeRpcResult = {
+  ok: boolean;
+  data?: Record<string, unknown> | null;
+  error?: string;
+};
+
+/** Learner enroll into monthly challenge (no admin UI). Same RPC as Edubite web. */
 export async function enrollMonthlyChallenge(args: {
   monthKey: string;
   displayName: string;
   dateKey?: string;
-}): Promise<Record<string, unknown> | null> {
+}): Promise<ChallengeRpcResult> {
   const { data, error } = await supabase.rpc('edubite_enroll_monthly_challenge', {
     p_month_key: args.monthKey,
     p_display_name: args.displayName,
@@ -408,9 +414,124 @@ export async function enrollMonthlyChallenge(args: {
   });
   if (error) {
     console.warn('edubite_enroll_monthly_challenge failed:', error.message);
+    return { ok: false, error: mapChallengeError(error.message) };
+  }
+  return { ok: true, data: (data as Record<string, unknown>) ?? null };
+}
+
+/** Final puzzle submit — same RPC as Edubite web. */
+export async function submitMonthlyChallenge(args: {
+  monthKey: string;
+  answer: string;
+  displayName: string;
+  dateKey?: string;
+}): Promise<ChallengeRpcResult> {
+  const { data, error } = await supabase.rpc('edubite_submit_monthly_challenge', {
+    p_month_key: args.monthKey,
+    p_answer: args.answer,
+    p_display_name: args.displayName,
+    p_date_key: args.dateKey ?? null,
+  });
+  if (error) {
+    console.warn('edubite_submit_monthly_challenge failed:', error.message);
+    return { ok: false, error: mapChallengeError(error.message) };
+  }
+  return { ok: true, data: (data as Record<string, unknown>) ?? null };
+}
+
+/** Announced winners for a month (SECURITY DEFINER RPC). */
+export async function fetchMonthlyChallengeWinners(
+  monthKey: string,
+): Promise<Array<{ display_name: string; submitted_at: string }>> {
+  const { data, error } = await supabase.rpc('edubite_monthly_challenge_winners', {
+    p_month_key: monthKey,
+  });
+  if (error) {
+    console.warn('edubite_monthly_challenge_winners failed:', error.message);
+    return [];
+  }
+  return (data ?? []) as Array<{ display_name: string; submitted_at: string }>;
+}
+
+/**
+ * Paid enrollment months from the roster table (same source Edubite web merges on load).
+ * Keeps challenge open after day 5 even if game_state payload lost enrollment keys.
+ */
+export async function fetchMonthlyChallengeEnrollmentMonths(): Promise<string[]> {
+  const uid = await requireSessionUserId();
+  if (!uid) return [];
+  const { data, error } = await supabase
+    .from('edubite_monthly_challenge_enrollments')
+    .select('month_key')
+    .eq('user_id', uid)
+    .not('stake_deducted_at', 'is', null);
+  if (error) {
+    console.warn('challenge enrollment roster read failed:', error.message);
+    return [];
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of data ?? []) {
+    const key = (row as { month_key?: string }).month_key;
+    if (typeof key !== 'string' || !/^\d{4}-\d{2}$/.test(key) || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(key);
+  }
+  return out.sort();
+}
+
+/** Whether the signed-in user already submitted this month's final puzzle. */
+export async function fetchOwnMonthlyChallengeEntry(
+  monthKey: string,
+): Promise<{ submittedAt: string } | null> {
+  const uid = await requireSessionUserId();
+  if (!uid) return null;
+  const { data, error } = await supabase
+    .from('edubite_monthly_challenge_entries')
+    .select('submitted_at')
+    .eq('month_key', monthKey)
+    .eq('user_id', uid)
+    .maybeSingle();
+  if (error) {
+    console.warn('own challenge entry read failed:', error.message);
     return null;
   }
-  return (data as Record<string, unknown>) ?? null;
+  if (!data?.submitted_at) return null;
+  return { submittedAt: data.submitted_at as string };
+}
+
+function mapChallengeError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('entry window') || m.includes('window is closed')) {
+    return 'Entry is only open on days 1–5 of the month.';
+  }
+  if (m.includes('insufficient rdm')) {
+    return 'Not enough RDM to unlock Monthly Challenge.';
+  }
+  if (m.includes('15-day') || m.includes('streak')) {
+    return 'Need a 15-day full journey streak (all 5 daily tasks) to enter the final puzzle.';
+  }
+  if (m.includes('not open') || m.includes('puzzle is not open')) {
+    return 'Final puzzle opens on the last day of the month.';
+  }
+  if (m.includes('already submitted')) {
+    return 'You already submitted an entry for this month.';
+  }
+  if (m.includes('verified enrollment') || m.includes('enrollment required')) {
+    return 'Enroll in this month’s challenge before submitting.';
+  }
+  if (m.includes('invalid challenge month')) {
+    return 'Can only enter or submit for the current month.';
+  }
+  if (m.includes('not authenticated')) {
+    return 'Sign in with Google to join the Monthly Challenge.';
+  }
+  if (m.includes('answer must')) {
+    return 'Answer must be 1–2000 characters.';
+  }
+  return message || 'Could not complete challenge action.';
 }
 
 // 7. PLEDGE REEL SLIDES

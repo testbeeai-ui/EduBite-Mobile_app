@@ -103,6 +103,52 @@ export function isFullDay(c: DayCriteria): boolean {
   return c.dose && c.funbrain && c.puzzles && c.habits && c.pledges;
 }
 
+export function emptyDayCriteria(): DayCriteria {
+  return {
+    dose: false,
+    funbrain: false,
+    puzzles: false,
+    habits: false,
+    pledges: false,
+    completedAt: null,
+    pledgeAM: false,
+    pledgePM: false,
+    habitsDone: [],
+  };
+}
+
+/**
+ * Resolve day criteria for calendar / Monthly Challenge stretch.
+ * Live task flags only apply to the learner's current day.
+ */
+export function criteriaForDate(
+  state: GameState,
+  dateKey: string,
+  asOfDateKey: string = todayKey(),
+): DayCriteria {
+  if (dateKey === asOfDateKey) {
+    const logged = state.dayCriteriaLog?.[dateKey];
+    if (state.lastActiveDate === dateKey) {
+      const live = todayCriteria(state);
+      if (!logged) return live;
+      return mergeDayCriteria(logged, live);
+    }
+    if (logged) return logged;
+    return emptyDayCriteria();
+  }
+
+  const fromLog = state.dayCriteriaLog?.[dateKey];
+  const doseDone = Boolean(state.doseDayLog?.[dateKey]?.completed);
+  if (fromLog || doseDone) {
+    return mergeDayCriteria(fromLog, {
+      ...emptyDayCriteria(),
+      dose: doseDone,
+    });
+  }
+
+  return emptyDayCriteria();
+}
+
 export function mergeDayCriteria(
   prev: DayCriteria | undefined,
   live: DayCriteria,
