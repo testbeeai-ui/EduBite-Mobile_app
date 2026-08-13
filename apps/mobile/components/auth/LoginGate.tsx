@@ -22,6 +22,10 @@ export function LoginGate() {
     signInWithGoogle,
   } = useAuth();
 
+  const webClientConfigured = Boolean(
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(),
+  );
+
   return (
     <View style={styles.root}>
       <LinearGradient
@@ -38,6 +42,15 @@ export function LoginGate() {
           to your account.
         </Text>
 
+        {!webClientConfigured ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>
+              Google Sign-In is not configured in this build (missing Web Client
+              ID). Rebuild the preview/production APK with EAS env set.
+            </Text>
+          </View>
+        ) : null}
+
         {authError ? (
           <TouchableOpacity style={styles.errorBox} onPress={clearAuthError}>
             <Text style={styles.errorText}>{authError}</Text>
@@ -49,7 +62,8 @@ export function LoginGate() {
           <ActivityIndicator color={theme.colors.purple} style={{ marginTop: 20 }} />
         ) : (
           <TouchableOpacity
-            style={styles.btn}
+            style={[styles.btn, !webClientConfigured && styles.btnDisabled]}
+            disabled={!webClientConfigured}
             onPress={() => {
               void signInWithGoogle();
             }}
@@ -124,6 +138,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  btnDisabled: {
+    opacity: 0.45,
   },
   btnText: {
     color: '#fff',

@@ -18,6 +18,7 @@ import { GameProvider, useGame } from '../lib/game/GameProvider';
 
 const QUICK_LINKS: Array<{ label: string; route: string }> = [
   { label: '🏠 Home', route: '/' },
+  { label: '🏆 Monthly Challenge', route: '/challenge' },
   { label: '🍬 DailyDose', route: '/dailydose' },
   { label: '⚡ FunBrain', route: '/funbrain' },
   { label: '🧠 Brain Gym', route: '/braingym' },
@@ -115,7 +116,10 @@ function RootGate() {
     return <Slot />;
   }
 
-  if (!SKIP_LOGIN_FOR_PREVIEW && loading) {
+  // Release / preview APKs never skip login. Skip is __DEV__-only (Expo Go UI tour).
+  const requireGoogleLogin = !SKIP_LOGIN_FOR_PREVIEW;
+
+  if (requireGoogleLogin && loading) {
     return (
       <View style={styles.boot}>
         <ActivityIndicator color={theme.colors.purple} size="large" />
@@ -124,7 +128,7 @@ function RootGate() {
     );
   }
 
-  if (!SKIP_LOGIN_FOR_PREVIEW && !isGoogleUser) {
+  if (requireGoogleLogin && !isGoogleUser) {
     return <LoginGate />;
   }
 
