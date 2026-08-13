@@ -11,7 +11,7 @@ import {
 import type { RecallReaderItem } from "../recall-reader-content";
 import { difficultyMultiplier } from "../storage";
 import { sfx } from "../utils/sound";
-import { ChoiceButton, GameBoard, StatusLine, COLORS } from "./_shared";
+import { ChoiceButton, COLORS, HudPill, PlayStage } from "./_shared";
 import { usePausableScheduler } from "./_pausable-scheduler";
 
 type Phase = "reading" | "question" | "feedback";
@@ -244,83 +244,101 @@ export function RecallReaderGame({
   if (!current) return null;
 
   return (
-    <GameBoard style={styles.board}>
-      <StatusLine>
-        Round {roundIndex + 1}/{RECALL_READER_ROUNDS} · Lives {lives} · Score {score}
-      </StatusLine>
-
-      <View style={styles.timerCard}>
-        <View style={styles.timerRow}>
-          <Text style={styles.timerLabel}>{phase === "reading" ? "Read carefully" : "Answer from memory"}</Text>
-          <Text style={styles.timerLabel}>
-            {phase === "reading" ? `${formatSeconds(readingMsLeft)}s` : "Passage hidden"}
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            Round {roundIndex + 1}/{RECALL_READER_ROUNDS} · Lives {lives} · Score {score}
           </Text>
-        </View>
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${phase === "reading" ? progressPct : 0}%` },
-            ]}
-          />
-        </View>
-      </View>
+        </HudPill>
 
-      {phase === "reading" ? (
-        <View style={styles.passageBox}>
-          <Text style={styles.passageText}>{current.paragraph}</Text>
-        </View>
-      ) : (
-        <View style={styles.questionBox}>
-          <Text style={styles.questionText}>{current.question}</Text>
-          <View style={styles.optionsList}>
-            {current.options.map((option, index) => {
-              const isCorrect = phase === "feedback" && index === current.correctIndex;
-              const isWrong =
-                phase === "feedback" && selectedIndex === index && index !== current.correctIndex;
-
-              return (
-                <ChoiceButton
-                  key={option}
-                  onPress={() => chooseAnswer(index)}
-                  disabled={paused || phase !== "question"}
-                  selected={selectedIndex === index}
-                  style={[
-                    styles.optionButton,
-                    isCorrect && styles.optionCorrect,
-                    isWrong && styles.optionWrong,
-                  ]}
-                >
-                  {option}
-                </ChoiceButton>
-              );
-            })}
+        <View style={styles.timerCard}>
+          <View style={styles.timerRow}>
+            <Text style={styles.timerLabel}>
+              {phase === "reading" ? "Read carefully" : "Answer from memory"}
+            </Text>
+            <Text style={styles.timerLabel}>
+              {phase === "reading" ? `${formatSeconds(readingMsLeft)}s` : "Passage hidden"}
+            </Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${phase === "reading" ? progressPct : 0}%` },
+              ]}
+            />
           </View>
         </View>
-      )}
 
-      <View
-        style={[
-          styles.feedbackBox,
-          feedback ? (feedback.correct ? styles.feedbackCorrect : styles.feedbackWrong) : undefined,
-        ]}
-      >
-        <Text style={styles.feedbackText}>
-          {feedback
-            ? feedback.message
-            : phase === "reading"
-              ? "The passage will disappear completely when the timer ends."
-              : "Choose the answer using only what you remember."}
-        </Text>
+        {phase === "reading" ? (
+          <View style={styles.passageBox}>
+            <Text style={styles.passageText}>{current.paragraph}</Text>
+          </View>
+        ) : (
+          <View style={styles.questionBox}>
+            <Text style={styles.questionText}>{current.question}</Text>
+            <View style={styles.optionsList}>
+              {current.options.map((option, index) => {
+                const isCorrect = phase === "feedback" && index === current.correctIndex;
+                const isWrong =
+                  phase === "feedback" &&
+                  selectedIndex === index &&
+                  index !== current.correctIndex;
+
+                return (
+                  <ChoiceButton
+                    key={option}
+                    onPress={() => chooseAnswer(index)}
+                    disabled={paused || phase !== "question"}
+                    selected={selectedIndex === index}
+                    style={[
+                      styles.optionButton,
+                      isCorrect && styles.optionCorrect,
+                      isWrong && styles.optionWrong,
+                    ]}
+                  >
+                    {option}
+                  </ChoiceButton>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        <View
+          style={[
+            styles.feedbackBox,
+            feedback
+              ? feedback.correct
+                ? styles.feedbackCorrect
+                : styles.feedbackWrong
+              : undefined,
+          ]}
+        >
+          <Text style={styles.feedbackText}>
+            {feedback
+              ? feedback.message
+              : phase === "reading"
+                ? "The passage will disappear completely when the timer ends."
+                : "Choose the answer using only what you remember."}
+          </Text>
+        </View>
       </View>
-    </GameBoard>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
   board: {
-    maxWidth: 560,
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: "rgba(20,26,35,0.95)",
+    padding: 16,
   },
+  hudText: { color: COLORS.text, fontWeight: "700", fontSize: 13 },
   timerCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -351,7 +369,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.teal,
   },
   passageBox: {
-    minHeight: 170,
+    flex: 1,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(45,212,191,0.3)",
@@ -366,7 +384,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   questionBox: {
-    minHeight: 170,
+    flex: 1,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.line,

@@ -217,10 +217,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.line,
-    backgroundColor: "rgba(20,26,35,0.92)",
+    backgroundColor: "rgba(20,26,35,0.95)",
     padding: 16,
     width: "100%",
     alignSelf: "stretch",
+    justifyContent: "center",
   },
   statusLine: {
     textAlign: "center",

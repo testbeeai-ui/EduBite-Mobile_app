@@ -1,26 +1,22 @@
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet } from "react-native";
-import type { GameComponentProps } from "../types";
-import { shuffle, range } from "../utils/shuffle";
-import { sfx } from "../utils/sound";
-import { difficultyMultiplier } from "../storage";
-import { GameBoard, StatusLine, GridWrap, CellButton } from "./_shared";
-import { usePausableScheduler } from "./_pausable-scheduler";
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import type { GameComponentProps } from '../types';
+import { shuffle, range } from '../utils/shuffle';
+import { sfx } from '../utils/sound';
+import { difficultyMultiplier } from '../storage';
+import { CellButton, COLORS, GridWrap, HudPill, PlayStage } from './_shared';
+import { usePausableScheduler } from './_pausable-scheduler';
 
 const ICONS = [
-  "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔",
-  "🐧", "🐦", "🐤", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🪱", "🐛", "🦋", "🐌",
-  "🐞", "🐜", "🦗", "🕷️", "🐙", "🦑", "🦐", "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🐊",
-  "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝",
-  "🍅", "🥑", "🍆", "🥔", "🥕", "🌽", "🌶️", "🫑", "🧅", "🧄", "🥐", "🥯", "🍞", "🥖", "🥨", "🧀",
-  "🥚", "🍳", "🥞", "🧇", "🥓", "🥩", "🍗", "🌭", "🍔", "🍟", "🍕", "🥪", "🌯", "🌮", "🍿", "🧈",
-  "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🍰", "🧁", "🥧", "🍫", "🍬", "🍭", "🍮", "🍯", "🥛", "☕",
-  "🍵", "🧃", "🥤", "🧋", "🍺", "🍻", "🍷", "🍹", "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉",
-  "🎱", "🪀", "🏓", "🏸", "🥅", "🎒", "🎓", "🕶️", "🥽", "🥼", "🛟", "🎈", "🎁", "🎨", "🎭", "🎪",
-  "🎫", "🎟️", "🔋", "💻", "📺", "📷", "💡", "🏮", "🧱", "🕯️", "🪓", "🔨", "🔧", "🔩", "🧪", "🧬",
-  "🩺", "🔭", "🔬", "🧲", "🔮", "🧿", "🪄", "🪘", "🎸", "🎹", "🎺", "🎻", "🥁", "🪈", "🪗", "🧩",
-  "🎯", "🎲", "🎰", "🎳", "🎮", "🏎️", "🏍️", "🚢", "🛫", "✈️", "🛬", "🎡", "🎢", "🎠", "⛺", "🛖",
-  "🏡", "🏠", "🏢", "🏫", "🏭", "🏦", "🏥", "🏨", "🏪", "🌋", "🏔️", "🏕️", "🏖️", "🏝️", "🏙️", "🏛️",
+  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔',
+  '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌',
+  '🐞', '🐜', '🦗', '🕷️', '🐙', '🦑', '🦐', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊',
+  '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝',
+  '🍅', '🥑', '🍆', '🥔', '🥕', '🌽', '🌶️', '🫑', '🧅', '🧄', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀',
+  '🥚', '🍳', '🥞', '🧇', '🥓', '🥩', '🍗', '🌭', '🍔', '🍟', '🍕', '🥪', '🌯', '🌮', '🍿', '🧈',
+  '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🥛', '☕',
+  '🍵', '🧃', '🥤', '🧋', '🍺', '🍻', '🍷', '🍹', '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉',
+  '🎱', '🪀', '🏓', '🏸', '🥅', '🎒', '🎓', '🕶️', '🥽', '🥼', '🛟', '🎈', '🎁', '🎨', '🎭', '🎪',
 ];
 
 export function ImageMemoryGame({
@@ -31,11 +27,11 @@ export function ImageMemoryGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const size = difficulty === "easy" ? 3 : 4;
+  const size = difficulty === 'easy' ? 3 : 4;
   const n = size * size;
   const [grid, setGrid] = useState<string[]>([]);
   const [changedGrid, setChangedGrid] = useState<string[]>([]);
-  const [phase, setPhase] = useState<"study" | "quiz">("study");
+  const [phase, setPhase] = useState<'study' | 'quiz'>('study');
   const [answer, setAnswer] = useState<number | null>(null);
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
@@ -48,12 +44,14 @@ export function ImageMemoryGame({
     const g = shuffle(ICONS).slice(0, n);
     const changedIndex = Math.floor(Math.random() * n);
     const replacement = shuffle(ICONS.filter((icon) => !g.includes(icon)))[0]!;
-    const nextChangedGrid = g.map((icon, index) => (index === changedIndex ? replacement : icon));
+    const nextChangedGrid = g.map((icon, index) =>
+      index === changedIndex ? replacement : icon,
+    );
     setGrid(g);
     setChangedGrid(nextChangedGrid);
     setAnswer(changedIndex);
-    setPhase("study");
-    schedule(() => setPhase("quiz"), difficulty === "hard" ? 1200 : 2000);
+    setPhase('study');
+    schedule(() => setPhase('quiz'), difficulty === 'hard' ? 1200 : 2000);
   };
 
   useEffect(() => {
@@ -62,7 +60,7 @@ export function ImageMemoryGame({
   }, []);
 
   const pick = (i: number) => {
-    if (paused || phase !== "quiz" || completedRef.current) return;
+    if (paused || phase !== 'quiz' || completedRef.current) return;
     if (i === answer) {
       sfx.correct(soundEnabled);
       const ns = score + Math.round(45 * difficultyMultiplier(difficulty) * round);
@@ -87,26 +85,63 @@ export function ImageMemoryGame({
     }
   };
 
-  const shown = phase === "study" ? grid : changedGrid;
+  const shown = phase === 'study' ? grid : changedGrid;
 
   return (
-    <GameBoard>
-      <StatusLine>
-        {phase === "study" ? "Study the icons…" : "Which icon changed?"} · Round {round}/5
-      </StatusLine>
-      <GridWrap columns={size}>
-        {range(n).map((i) => (
-          <CellButton key={i} onPress={() => pick(i)} disabled={phase === "study"} textStyle={styles.icon}>
-            {shown[i]}
-          </CellButton>
-        ))}
-      </GridWrap>
-    </GameBoard>
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            {phase === 'study' ? 'Study the icons…' : 'Which icon changed?'} · Round{' '}
+            {round}/5
+          </Text>
+        </HudPill>
+        <View style={styles.gridWrap}>
+          <GridWrap columns={size}>
+            {range(n).map((i) => (
+              <CellButton
+                key={i}
+                onPress={() => pick(i)}
+                disabled={phase === 'study'}
+                textStyle={styles.icon}
+              >
+                {shown[i]}
+              </CellButton>
+            ))}
+          </GridWrap>
+        </View>
+        <Text style={styles.hint}>
+          {phase === 'study'
+            ? 'Commit the grid to memory'
+            : 'Tap the cell that swapped'}
+        </Text>
+      </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
-  icon: {
-    fontSize: 26,
+  board: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    padding: 16,
+  },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
+  gridWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    maxWidth: 360,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  icon: { fontSize: 30 },
+  hint: {
+    textAlign: 'center',
+    color: COLORS.textDim,
+    fontSize: 12,
+    marginTop: 8,
   },
 });

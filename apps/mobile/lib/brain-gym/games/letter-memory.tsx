@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import type { GameComponentProps } from "../types";
-import { sfx } from "../utils/sound";
-import { difficultyMultiplier } from "../storage";
-import { shuffle } from "../utils/shuffle";
-import { GameBoard, StatusLine, PrimaryButton, COLORS } from "./_shared";
-import { usePausableScheduler } from "./_pausable-scheduler";
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import type { GameComponentProps } from '../types';
+import { sfx } from '../utils/sound';
+import { difficultyMultiplier } from '../storage';
+import { shuffle } from '../utils/shuffle';
+import { COLORS, HudPill, PlayStage, PrimaryButton } from './_shared';
+import { usePausableScheduler } from './_pausable-scheduler';
 
-const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 export function LetterMemoryGame({
   difficulty,
@@ -17,12 +17,12 @@ export function LetterMemoryGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const len = difficulty === "easy" ? 4 : difficulty === "medium" ? 5 : 6;
+  const len = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
   const [seq, setSeq] = useState<string[]>([]);
-  const [display, setDisplay] = useState("");
-  const [phase, setPhase] = useState<"flash" | "input">("flash");
+  const [display, setDisplay] = useState('');
+  const [phase, setPhase] = useState<'flash' | 'input'>('flash');
   const [flashPosition, setFlashPosition] = useState(0);
-  const [answer, setAnswer] = useState("");
+  const [answer, setAnswer] = useState('');
   const [replaysLeft, setReplaysLeft] = useState(1);
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
@@ -34,25 +34,25 @@ export function LetterMemoryGame({
   const make = (n: number) => shuffle([...LETTERS]).slice(0, n);
 
   const flash = (s: string[]) => {
-    setPhase("flash");
-    setAnswer("");
+    setPhase('flash');
+    setAnswer('');
     let i = 0;
     const showNextLetter = () => {
       setFlashPosition(i);
       setDisplay(s[i]!);
       sfx.tick(soundEnabled);
       schedule(() => {
-        setDisplay("");
+        setDisplay('');
         schedule(() => {
           i++;
           if (i >= s.length) {
-            setDisplay("?");
-            setPhase("input");
+            setDisplay('?');
+            setPhase('input');
             return;
           }
           showNextLetter();
         }, 300);
-      }, difficulty === "easy" ? 1_000 : difficulty === "medium" ? 850 : 650);
+      }, difficulty === 'easy' ? 1_000 : difficulty === 'medium' ? 850 : 650);
     };
     showNextLetter();
   };
@@ -65,8 +65,8 @@ export function LetterMemoryGame({
   }, []);
 
   const submit = () => {
-    if (paused || phase !== "input" || completedRef.current) return;
-    if (answer.toUpperCase().replace(/\s/g, "") === seq.join("")) {
+    if (paused || phase !== 'input' || completedRef.current) return;
+    if (answer.toUpperCase().replace(/\s/g, '') === seq.join('')) {
       sfx.correct(soundEnabled);
       const ns = score + Math.round(50 * difficultyMultiplier(difficulty) * round);
       setScore(ns);
@@ -94,68 +94,93 @@ export function LetterMemoryGame({
   };
 
   return (
-    <GameBoard>
-      <StatusLine>
-        Round {round}/5 ·{" "}
-        {phase === "flash" ? `Letter ${flashPosition + 1} of ${seq.length}` : `Enter all ${seq.length} letters`}
-      </StatusLine>
-      <View style={styles.displayWrap}>
-        <Text style={styles.display}>{display || (phase === "flash" ? "•" : "?")}</Text>
-      </View>
-      {phase === "input" && (
-        <View style={styles.form}>
-          <TextInput
-            value={answer}
-            onChangeText={(t) => setAnswer(t.toUpperCase().replace(/[^A-Z]/g, ""))}
-            onSubmitEditing={submit}
-            placeholder="Type the letters"
-            placeholderTextColor={COLORS.textDim}
-            style={styles.input}
-            autoCapitalize="characters"
-            autoFocus
-          />
-          <PrimaryButton label="Submit" onPress={submit} color={COLORS.blue} />
-          <PrimaryButton
-            label={replaysLeft > 0 ? "Replay letters once" : "Replay used"}
-            onPress={() => {
-              if (replaysLeft <= 0) return;
-              setReplaysLeft(0);
-              flash(seq);
-            }}
-            disabled={replaysLeft <= 0}
-            color={COLORS.surface2}
-            textColor={COLORS.text}
-            style={styles.secondaryButton}
-          />
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            Round {round}/5 ·{' '}
+            {phase === 'flash'
+              ? `Letter ${flashPosition + 1} of ${seq.length}`
+              : `Enter all ${seq.length} letters`}
+          </Text>
+        </HudPill>
+        <View style={styles.displayWrap}>
+          <Text style={styles.display}>
+            {display || (phase === 'flash' ? '•' : '?')}
+          </Text>
+          <Text style={styles.sub}>
+            {phase === 'flash' ? 'Memorize each letter…' : 'Type them in order'}
+          </Text>
         </View>
-      )}
-    </GameBoard>
+        {phase === 'input' ? (
+          <View style={styles.form}>
+            <TextInput
+              value={answer}
+              onChangeText={(t) => setAnswer(t.toUpperCase().replace(/[^A-Z]/g, ''))}
+              onSubmitEditing={submit}
+              placeholder="Type the letters"
+              placeholderTextColor={COLORS.textDim}
+              style={styles.input}
+              autoCapitalize="characters"
+              autoFocus
+            />
+            <PrimaryButton label="Submit" onPress={submit} color={COLORS.blue} />
+            <PrimaryButton
+              label={replaysLeft > 0 ? 'Replay letters once' : 'Replay used'}
+              onPress={() => {
+                if (replaysLeft <= 0) return;
+                setReplaysLeft(0);
+                flash(seq);
+              }}
+              disabled={replaysLeft <= 0}
+              color={COLORS.surface2}
+              textColor={COLORS.text}
+              style={styles.secondaryButton}
+            />
+          </View>
+        ) : (
+          <View style={styles.spacer} />
+        )}
+      </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
+  board: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    padding: 18,
+    justifyContent: 'center',
+  },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
   displayWrap: {
-    paddingVertical: 40,
-    alignItems: "center",
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 180,
   },
   display: {
-    fontSize: 52,
-    fontWeight: "800",
-    letterSpacing: 10,
+    fontSize: 64,
+    fontWeight: '800',
+    letterSpacing: 12,
     color: COLORS.blue,
   },
-  form: {
-    gap: 10,
-  },
+  sub: { marginTop: 12, color: COLORS.textDim, fontSize: 13 },
+  form: { gap: 10 },
+  spacer: { height: 48 },
   input: {
-    textAlign: "center",
-    fontSize: 20,
+    textAlign: 'center',
+    fontSize: 22,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.line,
     backgroundColor: COLORS.surface2,
     color: COLORS.text,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   secondaryButton: {
     borderWidth: 1,

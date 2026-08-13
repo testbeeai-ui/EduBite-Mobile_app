@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import type { GameComponentProps } from "../types";
-import { sfx } from "../utils/sound";
-import { difficultyMultiplier } from "../storage";
-import { GameBoard, StatusLine, PrimaryButton, COLORS } from "./_shared";
-import { usePausableScheduler } from "./_pausable-scheduler";
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import type { GameComponentProps } from '../types';
+import { sfx } from '../utils/sound';
+import { difficultyMultiplier } from '../storage';
+import { COLORS, HudPill, PlayStage, PrimaryButton } from './_shared';
+import { usePausableScheduler } from './_pausable-scheduler';
 
 export function NumberFlashGame({
   difficulty,
@@ -14,11 +14,11 @@ export function NumberFlashGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const len = difficulty === "easy" ? 4 : difficulty === "medium" ? 5 : 6;
+  const len = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
   const [seq, setSeq] = useState<number[]>([]);
-  const [display, setDisplay] = useState<string>("");
-  const [phase, setPhase] = useState<"flash" | "input">("flash");
-  const [answer, setAnswer] = useState("");
+  const [display, setDisplay] = useState<string>('');
+  const [phase, setPhase] = useState<'flash' | 'input'>('flash');
+  const [answer, setAnswer] = useState('');
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(1);
@@ -27,22 +27,22 @@ export function NumberFlashGame({
   const { schedule } = usePausableScheduler(paused);
 
   const flash = (s: number[]) => {
-    setPhase("flash");
-    setAnswer("");
+    setPhase('flash');
+    setAnswer('');
     let i = 0;
     setDisplay(String(s[0]));
     const nextDigit = () => {
       schedule(() => {
         i++;
         if (i >= s.length) {
-          setDisplay("?");
-          setPhase("input");
+          setDisplay('?');
+          setPhase('input');
           return;
         }
         setDisplay(String(s[i]));
         sfx.tick(soundEnabled);
         nextDigit();
-      }, difficulty === "hard" ? 450 : 700);
+      }, difficulty === 'hard' ? 450 : 700);
     };
     nextDigit();
   };
@@ -55,9 +55,9 @@ export function NumberFlashGame({
   }, []);
 
   const submit = () => {
-    if (paused || phase !== "input" || completedRef.current) return;
-    const target = seq.join("");
-    if (answer.replace(/\s/g, "") === target) {
+    if (paused || phase !== 'input' || completedRef.current) return;
+    const target = seq.join('');
+    if (answer.replace(/\s/g, '') === target) {
       sfx.correct(soundEnabled);
       const ns = score + Math.round(50 * difficultyMultiplier(difficulty) * round);
       setScore(ns);
@@ -85,52 +85,73 @@ export function NumberFlashGame({
   };
 
   return (
-    <GameBoard>
-      <StatusLine>Round {round}/5 · Remember the digits</StatusLine>
-      <View style={styles.displayWrap}>
-        <Text style={styles.display}>{display}</Text>
-      </View>
-      {phase === "input" && (
-        <View style={styles.form}>
-          <TextInput
-            keyboardType="number-pad"
-            value={answer}
-            onChangeText={(t) => setAnswer(t.replace(/\D/g, ""))}
-            onSubmitEditing={submit}
-            placeholder="Type the sequence"
-            placeholderTextColor={COLORS.textDim}
-            style={styles.input}
-            autoFocus
-          />
-          <PrimaryButton label="Submit" onPress={submit} />
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>Round {round}/5 · Remember the digits</Text>
+        </HudPill>
+        <View style={styles.displayWrap}>
+          <Text style={styles.display}>{display}</Text>
+          <Text style={styles.sub}>
+            {phase === 'flash' ? 'Watch closely…' : 'Type them back in order'}
+          </Text>
         </View>
-      )}
-    </GameBoard>
+        {phase === 'input' ? (
+          <View style={styles.form}>
+            <TextInput
+              keyboardType="number-pad"
+              value={answer}
+              onChangeText={(t) => setAnswer(t.replace(/\D/g, ''))}
+              onSubmitEditing={submit}
+              placeholder="Type the sequence"
+              placeholderTextColor={COLORS.textDim}
+              style={styles.input}
+              autoFocus
+            />
+            <PrimaryButton label="Submit" onPress={submit} />
+          </View>
+        ) : (
+          <View style={styles.spacer} />
+        )}
+      </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
+  board: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    padding: 18,
+    justifyContent: 'center',
+  },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
   displayWrap: {
-    paddingVertical: 40,
-    alignItems: "center",
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 180,
   },
   display: {
-    fontSize: 52,
-    fontWeight: "800",
-    letterSpacing: 8,
+    fontSize: 64,
+    fontWeight: '800',
+    letterSpacing: 10,
     color: COLORS.teal,
   },
-  form: {
-    gap: 12,
-  },
+  sub: { marginTop: 12, color: COLORS.textDim, fontSize: 13 },
+  form: { gap: 12 },
+  spacer: { height: 48 },
   input: {
-    textAlign: "center",
-    fontSize: 20,
+    textAlign: 'center',
+    fontSize: 22,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.line,
     backgroundColor: COLORS.surface2,
     color: COLORS.text,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
 });

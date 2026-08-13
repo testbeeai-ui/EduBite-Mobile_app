@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet } from "react-native";
-import type { GameComponentProps } from "../types";
-import { shuffle, range } from "../utils/shuffle";
-import { sfx } from "../utils/sound";
-import { difficultyMultiplier } from "../storage";
-import { GameBoard, StatusLine, GridWrap, CellButton, PrimaryButton, COLORS } from "./_shared";
-import { usePausableScheduler } from "./_pausable-scheduler";
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import type { GameComponentProps } from '../types';
+import { shuffle, range } from '../utils/shuffle';
+import { sfx } from '../utils/sound';
+import { difficultyMultiplier } from '../storage';
+import {
+  CellButton,
+  COLORS,
+  GridWrap,
+  HudPill,
+  PlayStage,
+  PrimaryButton,
+} from './_shared';
+import { usePausableScheduler } from './_pausable-scheduler';
 
 export function PatternMemoryGame({
   difficulty,
@@ -15,9 +22,9 @@ export function PatternMemoryGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const size = difficulty === "easy" ? 3 : difficulty === "medium" ? 4 : 5;
+  const size = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5;
   const cells = size * size;
-  const count = difficulty === "easy" ? 3 : difficulty === "medium" ? 5 : 7;
+  const count = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 5 : 7;
   const [pattern, setPattern] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [show, setShow] = useState(true);
@@ -34,7 +41,7 @@ export function PatternMemoryGame({
     setPattern(p);
     setSelected(new Set());
     setShow(true);
-    const studyMs = difficulty === "easy" ? 1_800 : difficulty === "medium" ? 1_500 : 1_200;
+    const studyMs = difficulty === 'easy' ? 1_800 : difficulty === 'medium' ? 1_500 : 1_200;
     schedule(() => setShow(false), studyMs);
   };
 
@@ -82,31 +89,63 @@ export function PatternMemoryGame({
   };
 
   return (
-    <GameBoard>
-      <StatusLine>{show ? "Memorize the pattern!" : "Recreate it"} · Round {round}/5</StatusLine>
-      <GridWrap columns={size}>
-        {range(cells).map((i) => {
-          const on = show ? pattern.has(i) : selected.has(i);
-          return (
-            <CellButton
-              key={i}
-              onPress={() => toggle(i)}
-              style={on ? styles.on : undefined}
-            />
-          );
-        })}
-      </GridWrap>
-      {!show && <PrimaryButton label="Check pattern" onPress={submit} style={styles.submit} />}
-    </GameBoard>
+    <PlayStage>
+      <View style={styles.board}>
+        <HudPill>
+          <Text style={styles.hudText}>
+            {show ? 'Memorize the pattern!' : 'Recreate it'} · Round {round}/5
+          </Text>
+        </HudPill>
+        <View style={styles.gridWrap}>
+          <GridWrap columns={size}>
+            {range(cells).map((i) => {
+              const on = show ? pattern.has(i) : selected.has(i);
+              return (
+                <CellButton
+                  key={i}
+                  onPress={() => toggle(i)}
+                  style={on ? styles.on : undefined}
+                />
+              );
+            })}
+          </GridWrap>
+        </View>
+        {!show ? (
+          <PrimaryButton label="Check pattern" onPress={submit} style={styles.submit} />
+        ) : (
+          <Text style={styles.hint}>Pattern disappears soon — hold it in mind</Text>
+        )}
+      </View>
+    </PlayStage>
   );
 }
 
 const styles = StyleSheet.create({
-  on: {
-    borderColor: "rgba(167,139,250,0.5)",
-    backgroundColor: "rgba(167,139,250,0.25)",
+  board: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    backgroundColor: 'rgba(20,26,35,0.95)',
+    padding: 16,
   },
-  submit: {
-    marginTop: 14,
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
+  gridWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    maxWidth: 360,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  on: {
+    borderColor: 'rgba(167,139,250,0.5)',
+    backgroundColor: 'rgba(167,139,250,0.25)',
+  },
+  submit: { marginTop: 8 },
+  hint: {
+    textAlign: 'center',
+    color: COLORS.textDim,
+    fontSize: 12,
+    marginTop: 8,
   },
 });
