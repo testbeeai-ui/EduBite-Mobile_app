@@ -11,6 +11,7 @@ import {
   type Board,
   type Dir,
 } from './game-2048-logic';
+import { SquareGrid } from './_shared';
 
 export function Game2048({
   difficulty,
@@ -98,13 +99,29 @@ export function Game2048({
         2048 · Reach {target} · Score {score}
       </Text>
       <Text style={styles.hint}>Swipe to move</Text>
-      <View style={styles.grid}>
-        {board.flat().map((v, i) => (
-          <View key={i} style={[styles.cell, v ? styles.filled : null]}>
-            <Text style={styles.num}>{v || ''}</Text>
-          </View>
-        ))}
-      </View>
+      <SquareGrid cols={4} rows={4} gap={8} minCell={64} style={styles.gridHost}>
+        {({ cell }) =>
+          board.flat().map((v, i) => (
+            <View
+              key={i}
+              style={[
+                styles.cell,
+                { width: cell, height: cell },
+                v ? styles.filled : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.num,
+                  { fontSize: Math.max(16, Math.round(cell * 0.32)) },
+                ]}
+              >
+                {v || ''}
+              </Text>
+            </View>
+          ))
+        }
+      </SquareGrid>
     </View>
   );
 }
@@ -121,18 +138,14 @@ const styles = StyleSheet.create({
   },
   status: { textAlign: 'center', color: '#8B96A8', fontWeight: '600' },
   hint: { textAlign: 'center', color: '#5C6577', marginBottom: 14, fontSize: 12 },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
+  gridHost: {
+    flex: 1,
+    minHeight: 240,
     maxWidth: 360,
     alignSelf: 'center',
     width: '100%',
   },
   cell: {
-    width: '22%',
-    aspectRatio: 1,
     borderRadius: 12,
     backgroundColor: '#171E28',
     alignItems: 'center',

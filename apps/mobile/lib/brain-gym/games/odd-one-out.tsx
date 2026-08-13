@@ -4,7 +4,7 @@ import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
-import { COLORS, HudPill, PlayStage } from './_shared';
+import { COLORS, HudPill, PlayStage, SquareGrid } from './_shared';
 
 const CATEGORIES: Record<string, string[]> = {
   fruits: ['🍎', '🍌', '🍇', '🍊', '🍋', '🍉', '🍓'],
@@ -98,17 +98,30 @@ export function OddOneOutGame({
         </HudPill>
         <Text style={styles.hint}>Three belong together — tap the one that doesn’t</Text>
 
-        <View style={styles.grid}>
-          {round.items.map((item, i) => (
-            <Pressable
-              key={`${n}-${item}-${i}`}
-              style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
-              onPress={() => pick(item)}
-            >
-              <Text style={styles.emoji}>{item}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <SquareGrid cols={2} rows={2} gap={12} minCell={96} style={styles.gridHost}>
+          {({ cell }) =>
+            round.items.map((item, i) => (
+              <Pressable
+                key={`${n}-${item}-${i}`}
+                style={({ pressed }) => [
+                  styles.cell,
+                  { width: cell, height: cell },
+                  pressed && styles.cellPressed,
+                ]}
+                onPress={() => pick(item)}
+              >
+                <Text
+                  style={[
+                    styles.emoji,
+                    { fontSize: Math.max(40, Math.round(cell * 0.45)) },
+                  ]}
+                >
+                  {item}
+                </Text>
+              </Pressable>
+            ))
+          }
+        </SquareGrid>
       </View>
     </PlayStage>
   );
@@ -132,18 +145,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 16,
   },
-  grid: {
+  gridHost: {
     flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'center',
-    alignContent: 'center',
+    minHeight: 200,
   },
   cell: {
-    width: '46%',
-    maxWidth: 180,
-    aspectRatio: 1,
     borderRadius: 22,
     backgroundColor: COLORS.surface2,
     alignItems: 'center',

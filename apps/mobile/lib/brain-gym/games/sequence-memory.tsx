@@ -4,7 +4,7 @@ import type { GameComponentProps } from "../types";
 import { sfx } from "../utils/sound";
 import { difficultyMultiplier } from "../storage";
 import { usePausableScheduler } from "./_pausable-scheduler";
-import { COLORS } from "./_shared";
+import { COLORS, PlayStage, SquareGrid } from "./_shared";
 
 export function SequenceMemoryGame({
   difficulty,
@@ -15,6 +15,7 @@ export function SequenceMemoryGame({
   paused,
 }: GameComponentProps) {
   const grid = 9;
+  const cols = 3;
   const [seq, setSeq] = useState<number[]>([]);
   const [input, setInput] = useState<number[]>([]);
   const [lit, setLit] = useState<number | null>(null);
@@ -87,12 +88,21 @@ export function SequenceMemoryGame({
     }
     if (next.length === seq.length) {
       sfx.correct(soundEnabled);
-      const ns = score + Math.round(10 * seq.length * difficultyMultiplier(difficulty));
+      const ns =
+        score + Math.round(10 * seq.length * difficultyMultiplier(difficulty));
       setScore(ns);
       onScoreChange?.(ns);
-      if (seq.length >= (difficulty === "easy" ? 8 : difficulty === "medium" ? 10 : 12)) {
+      if (
+        seq.length >=
+        (difficulty === "easy" ? 8 : difficulty === "medium" ? 10 : 12)
+      ) {
         completedRef.current = true;
-        onComplete({ score: ns, won: true, timeMs: Date.now() - start, difficulty });
+        onComplete({
+          score: ns,
+          won: true,
+          timeMs: Date.now() - start,
+          difficulty,
+        });
         return;
       }
       const extended = [...seq, Math.floor(Math.random() * grid)];
@@ -102,27 +112,45 @@ export function SequenceMemoryGame({
   };
 
   return (
-    <View style={styles.board}>
-      <Text style={styles.status}>
-        {mode === "watch" ? "Watch sequence..." : "Your turn"} · Level {seq.length} · Score {score}
-      </Text>
-      <View style={styles.grid}>
-        {Array.from({ length: grid }, (_, i) => {
-          const isActive = lit === i;
-          return (
-            <View key={i} style={styles.tileSlot}>
-              <Pressable
-                disabled={paused || mode !== "input"}
-                onPress={() => tap(i)}
-                style={[styles.tile, isActive && styles.tileActive]}
-              >
-                <Text style={styles.tileText}>{i + 1}</Text>
-              </Pressable>
-            </View>
-          );
-        })}
+    <PlayStage>
+      <View style={styles.board}>
+        <Text style={styles.status}>
+          {mode === "watch" ? "Watch sequence..." : "Your turn"} · Level{" "}
+          {seq.length} · Score {score}
+        </Text>
+        <SquareGrid cols={cols} rows={cols} gap={12} minCell={72}>
+          {({ cell }) =>
+            Array.from({ length: grid }, (_, i) => {
+              const isActive = lit === i;
+              return (
+                <Pressable
+                  key={i}
+                  disabled={paused || mode !== "input"}
+                  onPress={() => tap(i)}
+                  style={[
+                    styles.tile,
+                    {
+                      width: cell,
+                      height: cell,
+                    },
+                    isActive && styles.tileActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tileText,
+                      { fontSize: Math.max(22, Math.round(cell * 0.32)) },
+                    ]}
+                  >
+                    {i + 1}
+                  </Text>
+                </Pressable>
+              );
+            })
+          }
+        </SquareGrid>
       </View>
-    </View>
+    </PlayStage>
   );
 }
 
@@ -133,32 +161,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.line,
     backgroundColor: "rgba(20,26,35,0.95)",
-    padding: 18,
+    padding: 16,
     width: "100%",
-    justifyContent: "center",
   },
   status: {
     textAlign: "center",
     fontSize: 13,
     fontWeight: "700",
     color: COLORS.textDim,
-    marginBottom: 18,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -7,
-    maxWidth: 360,
-    alignSelf: "center",
-    width: "100%",
-  },
-  tileSlot: {
-    width: `${100 / 3}%`,
-    padding: 7,
+    marginBottom: 12,
   },
   tile: {
-    flex: 1,
-    aspectRatio: 1,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -168,11 +181,11 @@ const styles = StyleSheet.create({
   },
   tileActive: {
     borderColor: COLORS.teal,
-    backgroundColor: "rgba(45,212,191,0.18)",
+    backgroundColor: "rgba(45,212,191,0.28)",
+    borderWidth: 2,
   },
   tileText: {
     color: COLORS.text,
-    fontSize: 26,
     fontWeight: "700",
     textAlign: "center",
   },

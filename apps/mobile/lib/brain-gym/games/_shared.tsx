@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import {
+  LayoutChangeEvent,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -8,6 +9,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { computeSquareCellSize } from "../square-grid";
 
 /** Dark theme palette shared by every Brain Gym game screen. */
 export const COLORS = {
@@ -25,6 +27,100 @@ export const COLORS = {
   red: "#F87171",
   green: "#34D399",
 } as const;
+
+export type SquareGridLayout = {
+  cell: number;
+  gap: number;
+  gridWidth: number;
+  gridHeight: number;
+};
+
+/** Measure a board and derive pixel-square cell sizes (never % + aspectRatio). */
+export function useSquareGridLayout(
+  cols: number,
+  rows: number,
+  gap = 10,
+  minCell = 48,
+): {
+  layout: SquareGridLayout;
+  onLayout: (e: LayoutChangeEvent) => void;
+} {
+  const [layout, setLayout] = useState<SquareGridLayout>(() =>
+    computeSquareCellSize({
+      width: cols * minCell + (cols - 1) * gap,
+      height: rows * minCell + (rows - 1) * gap,
+      cols,
+      rows,
+      gap,
+      minCell,
+    }),
+  );
+
+  const onLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const { width, height } = e.nativeEvent.layout;
+      if (width < 8 || height < 8) return;
+      const next = computeSquareCellSize({
+        width,
+        height,
+        cols,
+        rows,
+        gap,
+        minCell,
+      });
+      setLayout((prev) =>
+        prev.cell === next.cell &&
+        prev.gap === next.gap &&
+        prev.gridWidth === next.gridWidth &&
+        prev.gridHeight === next.gridHeight
+          ? prev
+          : next,
+      );
+    },
+    [cols, rows, gap, minCell],
+  );
+
+  return { layout, onLayout };
+}
+
+/**
+ * Centered N×M grid of equal pixel squares.
+ * Children receive cell size so tiles set explicit width/height.
+ */
+export function SquareGrid({
+  cols,
+  rows,
+  gap = 10,
+  minCell = 48,
+  style,
+  children,
+}: {
+  cols: number;
+  rows: number;
+  gap?: number;
+  minCell?: number;
+  style?: StyleProp<ViewStyle>;
+  children: (layout: SquareGridLayout) => React.ReactNode;
+}) {
+  const { layout, onLayout } = useSquareGridLayout(cols, rows, gap, minCell);
+  return (
+    <View style={[styles.squareGridHost, style]} onLayout={onLayout}>
+      <View
+        style={{
+          width: layout.gridWidth,
+          height: layout.gridHeight,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: layout.gap,
+          alignContent: "center",
+          justifyContent: "center",
+        }}
+      >
+        {children(layout)}
+      </View>
+    </View>
+  );
+}
 
 /**
  * Full play-area shell — fills GameShell body so games aren't stuck at the top
@@ -66,27 +162,35 @@ export function HudPill({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Wraps children into an N-column grid using percentage widths. */
+/**
+ * Wraps children into an N-column square grid using measured pixel cells.
+ * Prefer SquareGrid when you need the cell size for tile styling.
+ */
 export function GridWrap({
   children,
   columns,
   gap = 8,
+  minCell = 48,
   style,
 }: {
   children: React.ReactNode;
   columns: number;
   gap?: number;
+  minCell?: number;
   style?: StyleProp<ViewStyle>;
 }) {
   const items = React.Children.toArray(children);
+  const rows = Math.max(1, Math.ceil(items.length / columns));
   return (
-    <View style={[{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -gap / 2 }, style]}>
-      {items.map((child, i) => (
-        <View key={i} style={{ width: `${100 / columns}%`, padding: gap / 2 }}>
-          {child}
-        </View>
-      ))}
-    </View>
+    <SquareGrid cols={columns} rows={rows} gap={gap} minCell={minCell} style={style}>
+      {({ cell }) =>
+        items.map((child, i) => (
+          <View key={i} style={{ width: cell, height: cell }}>
+            {child}
+          </View>
+        ))
+      }
+    </SquareGrid>
   );
 }
 
@@ -246,8 +350,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
+  squareGridHost: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 160,
+  },
   cell: {
-    aspectRatio: 1,
+    width: "100%",
+    height: "100%",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.line,

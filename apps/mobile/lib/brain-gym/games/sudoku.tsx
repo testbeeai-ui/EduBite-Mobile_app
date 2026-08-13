@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { sfx } from '../utils/sound';
+import { SquareGrid } from './_shared';
 
 type Cell = number | null;
 
@@ -107,24 +108,34 @@ export function SudokuGame({
   return (
     <View style={styles.board}>
       <Text style={styles.status}>4×4 Sudoku · Score {score}</Text>
-      <View style={styles.grid}>
-        {grid.map((v, i) => {
-          const given = puzzle.given[i] != null;
-          return (
-            <Pressable
-              key={i}
-              onPress={() => setSelected(i)}
-              style={[
-                styles.cell,
-                selected === i && styles.cellSel,
-                given && styles.cellGiven,
-              ]}
-            >
-              <Text style={styles.num}>{v ?? ''}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <SquareGrid cols={4} rows={4} gap={8} minCell={64} style={styles.gridHost}>
+        {({ cell }) =>
+          grid.map((v, i) => {
+            const given = puzzle.given[i] != null;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => setSelected(i)}
+                style={[
+                  styles.cell,
+                  { width: cell, height: cell },
+                  selected === i && styles.cellSel,
+                  given && styles.cellGiven,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.num,
+                    { fontSize: Math.max(18, Math.round(cell * 0.38)) },
+                  ]}
+                >
+                  {v ?? ''}
+                </Text>
+              </Pressable>
+            );
+          })
+        }
+      </SquareGrid>
       <View style={styles.pad}>
         {[1, 2, 3, 4].map((n) => (
           <Pressable key={n} style={styles.key} onPress={() => place(n)}>
@@ -147,18 +158,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   status: { textAlign: 'center', color: '#8B96A8', marginBottom: 14, fontWeight: '600' },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
+  gridHost: {
     maxWidth: 320,
     alignSelf: 'center',
     width: '100%',
+    minHeight: 260,
   },
   cell: {
-    width: '22%',
-    aspectRatio: 1,
     borderRadius: 12,
     backgroundColor: '#171E28',
     alignItems: 'center',

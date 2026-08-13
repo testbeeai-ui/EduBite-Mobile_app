@@ -4,11 +4,14 @@ import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { range } from '../utils';
 import { sfx } from '../utils/sound';
+import { SquareGrid } from './_shared';
 
 type Cell = { mine: boolean; open: boolean; flag: boolean; n: number };
 
+const SIZE = 6;
+
 function build(difficulty: GameComponentProps['difficulty']): Cell[] {
-  const size = 6;
+  const size = SIZE;
   const mines = difficulty === 'easy' ? 5 : difficulty === 'medium' ? 8 : 11;
   const cells: Cell[] = range(size * size).map(() => ({
     mine: false,
@@ -51,7 +54,7 @@ export function MinesweeperGame({
   onScoreChange,
   paused,
 }: GameComponentProps) {
-  const size = 6;
+  const size = SIZE;
   const [cells, setCells] = useState(() => build(difficulty));
   const [start] = useState(() => Date.now());
   const done = useRef(false);
@@ -120,26 +123,32 @@ export function MinesweeperGame({
   return (
     <View style={styles.board}>
       <Text style={styles.status}>Minesweeper · long-press to flag</Text>
-      <View style={styles.grid}>
-        {cells.map((cell, i) => (
-          <Pressable
-            key={i}
-            onPress={() => open(i)}
-            onLongPress={() => flag(i)}
-            style={[styles.cell, cell.open && styles.open]}
-          >
-            <Text style={styles.txt}>
-              {cell.flag
-                ? '🚩'
-                : cell.open
-                  ? cell.mine
-                    ? '💣'
-                    : cell.n || ''
-                  : ''}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <SquareGrid cols={SIZE} rows={SIZE} gap={6} minCell={44} style={styles.gridHost}>
+        {({ cell: size }) =>
+          cells.map((cell, i) => (
+            <Pressable
+              key={i}
+              onPress={() => open(i)}
+              onLongPress={() => flag(i)}
+              style={[
+                styles.cell,
+                { width: size, height: size },
+                cell.open && styles.open,
+              ]}
+            >
+              <Text style={[styles.txt, { fontSize: Math.max(12, Math.round(size * 0.35)) }]}>
+                {cell.flag
+                  ? '🚩'
+                  : cell.open
+                    ? cell.mine
+                      ? '💣'
+                      : cell.n || ''
+                    : ''}
+              </Text>
+            </Pressable>
+          ))
+        }
+      </SquareGrid>
     </View>
   );
 }
@@ -155,18 +164,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   status: { textAlign: 'center', color: '#8B96A8', marginBottom: 14, fontWeight: '600' },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'center',
+  gridHost: {
+    flex: 1,
+    minHeight: 280,
     maxWidth: 360,
     alignSelf: 'center',
     width: '100%',
   },
   cell: {
-    width: '15%',
-    aspectRatio: 1,
     borderRadius: 8,
     backgroundColor: '#1B2330',
     alignItems: 'center',

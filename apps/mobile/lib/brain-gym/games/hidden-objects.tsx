@@ -4,7 +4,7 @@ import type { GameComponentProps } from '../types';
 import { difficultyMultiplier } from '../storage';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
-import { COLORS, HudPill, PlayStage } from './_shared';
+import { COLORS, HudPill, PlayStage, SquareGrid } from './_shared';
 
 const POOL = [
   '🔑',
@@ -158,28 +158,43 @@ export function HiddenObjectsGame({
         </View>
 
         <View style={styles.scene}>
-          {scene.cells.map((cell) => {
-            const got = found.has(cell.emoji) && cell.isTarget;
-            return (
-              <Pressable
-                key={cell.id}
-                onPress={() => tap(cell)}
-                disabled={got}
-                style={({ pressed }) => [
-                  styles.cell,
-                  { width: `${100 / scene.cols}%` },
-                  got && styles.cellFound,
-                  pressed && !got && styles.cellPressed,
-                ]}
-              >
-                <View style={styles.cellInner}>
-                  <Text style={[styles.emoji, got && styles.emojiFound]}>
-                    {got ? '✓' : cell.emoji}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
+          <SquareGrid
+            cols={scene.cols}
+            rows={Math.ceil(scene.cells.length / scene.cols)}
+            gap={8}
+            minCell={56}
+          >
+            {({ cell: size }) =>
+              scene.cells.map((cell) => {
+                const got = found.has(cell.emoji) && cell.isTarget;
+                return (
+                  <Pressable
+                    key={cell.id}
+                    onPress={() => tap(cell)}
+                    disabled={got}
+                    style={({ pressed }) => [
+                      styles.cell,
+                      { width: size, height: size },
+                      got && styles.cellFound,
+                      pressed && !got && styles.cellPressed,
+                    ]}
+                  >
+                    <View style={styles.cellInner}>
+                      <Text
+                        style={[
+                          styles.emoji,
+                          { fontSize: Math.max(20, Math.round(size * 0.4)) },
+                          got && styles.emojiFound,
+                        ]}
+                      >
+                        {got ? '✓' : cell.emoji}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            }
+          </SquareGrid>
         </View>
       </View>
     </PlayStage>
@@ -221,22 +236,21 @@ const styles = StyleSheet.create({
   targetEmojiDone: { color: COLORS.green, fontWeight: '800', fontSize: 18 },
   scene: {
     flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignContent: 'stretch',
+    minHeight: 220,
     backgroundColor: '#0B0F16',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.line,
     overflow: 'hidden',
-    padding: 4,
+    padding: 8,
   },
   cell: {
-    aspectRatio: 1,
-    padding: 4,
+    padding: 0,
   },
   cellInner: {
     flex: 1,
+    width: '100%',
+    height: '100%',
     borderRadius: 12,
     backgroundColor: COLORS.surface2,
     borderWidth: 1,
