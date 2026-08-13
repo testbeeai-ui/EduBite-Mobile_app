@@ -19,7 +19,6 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
       "env": {
         "EXPO_PUBLIC_SKIP_AUTH": "0",
         "EXPO_PUBLIC_SUPABASE_URL": "https://bytsiknhtcnlxwzgqkrd.supabase.co",
@@ -31,7 +30,6 @@
       }
     },
     "production": {
-      "channel": "production",
       "env": {
         "EXPO_PUBLIC_SKIP_AUTH": "0",
         "EXPO_PUBLIC_SUPABASE_URL": "https://bytsiknhtcnlxwzgqkrd.supabase.co",
