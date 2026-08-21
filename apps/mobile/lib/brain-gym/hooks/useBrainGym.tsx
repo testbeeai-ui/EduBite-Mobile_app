@@ -17,6 +17,7 @@ import {
   setSound,
   toggleFavorite,
 } from '../storage';
+import { setBrainGymRdmAmounts } from '../session-rdm';
 import { getGame } from '../registry';
 import type {
   BrainGymProgress,
@@ -25,6 +26,7 @@ import type {
   GameSessionResult,
 } from '../types';
 import { ensureSilentSession } from '../silent-auth';
+import { fetchEdubiteRewards } from '../../supabase';
 
 interface BrainGymContextValue {
   progress: BrainGymProgress;
@@ -72,6 +74,20 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       const uid = user?.id ?? null;
       setUserId(uid);
+      try {
+        const rewards = await fetchEdubiteRewards();
+        if (!cancelled) {
+          const map: Record<string, number> = {};
+          rewards.forEach((r) => {
+            if (r.reward_key.startsWith('brain_gym.')) {
+              map[r.reward_key] = r.amount;
+            }
+          });
+          setBrainGymRdmAmounts(map);
+        }
+      } catch {
+        /* keep defaults */
+      }
       const loaded = await loadBrainGym(uid);
       if (!cancelled) setProgress(loaded);
       if (uid) {
@@ -98,6 +114,10 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
   const closeGame = useCallback(() => {
     setActiveGameId(null);
     setIsDailyRun(false);
+  }, []);
+
+  const clearLastResult = useCallback(() => {
+    setLastResult(null);
   }, []);
 
   const completeSession = useCallback(
@@ -133,6 +153,12 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
       }).then((save) => {
         if (save.ok && mutationSeq === mutationSeqRef.current) {
           setProgress(save.progress);
+          // Prefer server-authoritative award for the result card.
+          setLastResult({
+            result,
+            rdmGain: Math.max(0, save.awarded),
+            newBadges,
+          });
         }
       });
       return { rdmGain, newBadges };
@@ -177,7 +203,7 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
       toggleSound: toggleSoundFn,
       toggleFav,
       lastResult,
-      clearLastResult: () => setLastResult(null),
+      clearLastResult,
     };
   }, [
     progress,
@@ -192,6 +218,7 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
     toggleSoundFn,
     toggleFav,
     lastResult,
+    clearLastResult,
   ]);
 
   if (!value) {

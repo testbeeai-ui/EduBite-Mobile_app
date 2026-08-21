@@ -45,17 +45,19 @@ export function GameShell() {
   const startRef = useRef(Date.now());
 
   useEffect(() => {
-    if (!activeGameId || !meta) return;
+    if (!activeGameId) return;
+    const nextMeta = GAME_MAP[activeGameId];
     setPhase('intro');
     setPaused(false);
     setScore(0);
-    setLives(meta.maxLives ?? 0);
+    setLives(nextMeta?.maxLives ?? 0);
     setRestartKey((k) => k + 1);
     setElapsed(0);
     completionHandledRef.current = false;
     clearLastResult();
     startRef.current = Date.now();
-  }, [activeGameId, meta, clearLastResult]);
+    // Only reset when a different game is opened — not when a session saves.
+  }, [activeGameId, clearLastResult]);
 
   useEffect(() => {
     if (!activeGameId) return;
@@ -120,6 +122,13 @@ export function GameShell() {
               {progress.soundEnabled ? '🔊' : '🔇'}
             </Text>
           </Pressable>
+          {phase === 'play' || phase === 'result' ? (
+            <View style={styles.scoreBadge}>
+              <Text style={styles.scoreBadgeText}>
+                {lastResult?.result.score ?? score}
+              </Text>
+            </View>
+          ) : null}
           {phase === 'play' ? (
             <Pressable
               onPress={() => setPaused((p) => !p)}
@@ -166,21 +175,33 @@ export function GameShell() {
                 onComplete={(result) => {
                   if (completionHandledRef.current) return;
                   completionHandledRef.current = true;
-                  completeSession(result);
+                  const nextScore = Number.isFinite(result.score)
+                    ? Math.max(0, Math.round(result.score))
+                    : 0;
+                  const safeResult = {
+                    ...result,
+                    score: nextScore,
+                    timeMs: Number.isFinite(result.timeMs)
+                      ? Math.max(0, Math.round(result.timeMs))
+                      : Date.now() - startRef.current,
+                    difficulty: result.difficulty || difficulty,
+                  };
+                  setScore(nextScore);
+                  completeSession(safeResult);
                   setPhase('result');
                 }}
               />
             </View>
           ) : null}
 
-          {phase === 'result' && lastResult ? (
+          {phase === 'result' ? (
             <PostGameLobby
-              won={lastResult.result.won}
-              summary={`Score ${lastResult.result.score} · ${formatMsAsClock(lastResult.result.timeMs)}${
-                lastResult.rdmGain > 0 ? ` · +${lastResult.rdmGain} RDM` : ''
-              }`}
+              won={lastResult?.result.won ?? false}
+              score={lastResult?.result.score ?? score}
+              timeLabel={formatMsAsClock(lastResult?.result.timeMs ?? elapsed)}
+              rdmGain={lastResult?.rdmGain ?? 0}
               badgesLine={
-                lastResult.newBadges.length > 0
+                lastResult && lastResult.newBadges.length > 0
                   ? `Badges: ${lastResult.newBadges.join(', ')}`
                   : null
               }
@@ -221,6 +242,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconBtnText: { color: theme.colors.text, fontSize: 14 },
+  scoreBadge: {
+    minWidth: 36,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: theme.colors.cardHi,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreBadgeText: {
+    color: theme.colors.teal,
+    fontWeight: '800',
+    fontSize: 14,
+  },
   title: { color: theme.colors.text, fontWeight: '700', fontSize: 15 },
   sub: { color: theme.colors.textDim, fontSize: 12, marginTop: 2 },
   statsRow: {

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GAMES } from './registry';
+import { computeBrainGymSessionRdm } from './session-rdm';
 import type {
   BrainGymMutation,
   BrainGymProgress,
@@ -14,18 +15,6 @@ import { supabase } from '../supabase';
 
 const LOCAL_KEY = 'edubite.braingym.v1';
 const MASTERY_WIN_LIMIT = 5;
-
-const RDM_DEFAULTS: Record<string, number> = {
-  'brain_gym.min_base': 5,
-  'brain_gym.score_divisor': 50,
-  'brain_gym.win_bonus': 10,
-  'brain_gym.daily_win_bonus': 25,
-  'brain_gym.session_cap': 100,
-};
-
-function getRdmAmount(key: string): number {
-  return RDM_DEFAULTS[key] ?? 0;
-}
 
 export function emptyDifficultyWins(): DifficultyWins {
   return { easy: 0, medium: 0, hard: 0 };
@@ -234,13 +223,11 @@ export function applySessionResult(
     },
   };
 
-  let rdmGain = Math.max(
-    getRdmAmount('brain_gym.min_base'),
-    Math.floor(score / Math.max(1, getRdmAmount('brain_gym.score_divisor'))),
-  );
-  if (result.won) rdmGain += getRdmAmount('brain_gym.win_bonus');
-  if (isDaily && result.won) rdmGain += getRdmAmount('brain_gym.daily_win_bonus');
-  rdmGain = Math.min(getRdmAmount('brain_gym.session_cap'), rdmGain);
+  let rdmGain = computeBrainGymSessionRdm({
+    score,
+    won: result.won,
+    isDaily,
+  });
   next.rdmEarned = progress.rdmEarned + rdmGain;
 
   const newBadges = evaluateBadges(next);

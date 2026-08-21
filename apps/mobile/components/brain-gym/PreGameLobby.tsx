@@ -72,7 +72,9 @@ export function PreGameLobby({
 
 type PostGameLobbyProps = {
   won: boolean;
-  summary: string;
+  score: number;
+  timeLabel: string;
+  rdmGain: number;
   badgesLine?: string | null;
   onPlayAgain: () => void;
   onDone: () => void;
@@ -81,7 +83,9 @@ type PostGameLobbyProps = {
 
 export function PostGameLobby({
   won,
-  summary,
+  score,
+  timeLabel,
+  rdmGain,
   badgesLine,
   onPlayAgain,
   onDone,
@@ -95,8 +99,21 @@ export function PostGameLobby({
         </Text>
       ) : null}
       <View style={styles.card}>
-        <Text style={styles.title}>{won ? 'You won!' : 'Session over'}</Text>
-        <Text style={styles.body}>{summary}</Text>
+        <Text style={styles.title}>{won ? 'Nice work!' : 'Session over'}</Text>
+        <View style={styles.statGrid}>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{score}</Text>
+            <Text style={styles.statLabel}>Score</Text>
+          </View>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>{timeLabel}</Text>
+            <Text style={styles.statLabel}>Time</Text>
+          </View>
+          <View style={styles.statCell}>
+            <Text style={styles.statValue}>+{rdmGain}</Text>
+            <Text style={styles.statLabel}>RDM</Text>
+          </View>
+        </View>
         {badgesLine ? <Text style={styles.body}>{badgesLine}</Text> : null}
         <View style={styles.rowBtns}>
           <Pressable style={[styles.primaryBtn, styles.flex]} onPress={onPlayAgain}>
@@ -145,6 +162,29 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   body: { color: theme.colors.textDim, lineHeight: 20, marginBottom: 12 },
+  statGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  statCell: {
+    flex: 1,
+    backgroundColor: theme.colors.cardHi,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  statValue: {
+    color: theme.colors.teal,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statLabel: {
+    color: theme.colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 4,
+  },
   tip: {
     color: theme.colors.amber,
     fontSize: 12,
