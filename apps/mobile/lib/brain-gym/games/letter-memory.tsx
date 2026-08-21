@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { sfx } from '../utils/sound';
-import { difficultyMultiplier } from '../storage';
+import { letterMemoryCorrectDelta } from '../scoring';
 import { shuffle } from '../utils/shuffle';
 import { COLORS, HudPill, PlayStage, PrimaryButton } from './_shared';
 import { usePausableScheduler } from './_pausable-scheduler';
@@ -68,7 +68,7 @@ export function LetterMemoryGame({
     if (paused || phase !== 'input' || completedRef.current) return;
     if (answer.toUpperCase().replace(/\s/g, '') === seq.join('')) {
       sfx.correct(soundEnabled);
-      const ns = score + Math.round(50 * difficultyMultiplier(difficulty) * round);
+      const ns = score + letterMemoryCorrectDelta(round, difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       if (round >= 5) {

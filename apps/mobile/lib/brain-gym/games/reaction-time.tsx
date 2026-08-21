@@ -1,17 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
-import { difficultyMultiplier } from '../storage';
+import {
+  isReactionRunWon,
+  reactionSessionScore,
+} from '../scoring';
 import { sfx } from '../utils/sound';
 import { usePausableScheduler } from './_pausable-scheduler';
 
 const MAX_FALSE_STARTS_FOR_WIN = 2;
-
-function reactionScoreForMs(reactionMs: number): number {
-  const humanAdjustedMs = Math.max(120, Math.min(1000, reactionMs));
-  const score = 100 - Math.max(0, humanAdjustedMs - 180) * 0.25;
-  return Math.max(0, Math.min(100, Math.round(score)));
-}
 
 export function ReactionTimeGame({
   difficulty,
@@ -81,6 +78,7 @@ export function ReactionTimeGame({
           won: false,
           timeMs: Date.now() - start,
           difficulty,
+          extra: { falseStarts: falseStarts.current },
         });
         setPhase('done');
         return;
@@ -97,15 +95,21 @@ export function ReactionTimeGame({
     setTimes(next);
     const r = round + 1;
     setRound(r);
-    const reactionScores = next.map(reactionScoreForMs);
-    const avg =
-      reactionScores.reduce((a, b) => a + b, 0) / reactionScores.length;
-    const score = Math.max(1, Math.round(avg * difficultyMultiplier(difficulty)));
+    const score = reactionSessionScore(next, falseStarts.current, difficulty);
     onScoreChange?.(score);
     if (r >= 5) {
       completedRef.current = true;
-      const won = falseStarts.current <= MAX_FALSE_STARTS_FOR_WIN && score >= 60;
-      onComplete({ score, won, timeMs: Date.now() - start, difficulty });
+      const avg = next.reduce((a, b) => a + b, 0) / next.length;
+      onComplete({
+        score,
+        won: isReactionRunWon(falseStarts.current, score),
+        timeMs: Date.now() - start,
+        difficulty,
+        extra: {
+          avgMs: Math.round(avg),
+          falseStarts: falseStarts.current,
+        },
+      });
       setPhase('done');
       return;
     }
@@ -118,25 +122,28 @@ export function ReactionTimeGame({
       : phase === 'early'
         ? '#D4537E'
         : phase === 'ready'
-          ? '#EF9F27'
-          : '#171E28';
+          ? '#243041'
+          : '#1B2330';
 
   return (
-    <Pressable onPress={tap} style={[styles.board, { backgroundColor: bg }]}>
+    <Pressable style={[styles.board, { backgroundColor: bg }]} onPress={tap}>
       <Text style={styles.status}>
-        Round {Math.min(round + 1, 5)}/5 ·{' '}
+        Round {Math.min(round + 1, 5)}/5 · False starts {falseStarts.current}
+      </Text>
+      <Text style={styles.prompt}>
         {phase === 'ready'
           ? 'Wait for green…'
           : phase === 'go'
             ? 'TAP!'
             : phase === 'early'
               ? 'Too early!'
-              : 'Get ready'}
+              : phase === 'done'
+                ? 'Done'
+                : 'Get ready'}
       </Text>
       {times.length > 0 ? (
-        <Text style={styles.meta}>
-          Last {times[times.length - 1]}ms · avg{' '}
-          {Math.round(times.reduce((a, b) => a + b, 0) / times.length)}ms
+        <Text style={styles.avg}>
+          Avg {Math.round(times.reduce((a, b) => a + b, 0) / times.length)}ms
         </Text>
       ) : null}
     </Pressable>
@@ -151,6 +158,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  status: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
-  meta: { color: 'rgba(255,255,255,0.85)', marginTop: 14, fontSize: 15 },
+  status: { color: '#8B96A8', fontWeight: '600', marginBottom: 12 },
+  prompt: { color: '#EAEEF3', fontSize: 36, fontWeight: '800' },
+  avg: { color: '#8B96A8', marginTop: 16, fontWeight: '600' },
 });

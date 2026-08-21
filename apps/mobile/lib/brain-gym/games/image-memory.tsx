@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { shuffle, range } from '../utils/shuffle';
 import { sfx } from '../utils/sound';
-import { difficultyMultiplier } from '../storage';
+import { imageMemoryCorrectDelta } from '../scoring';
 import { CellButton, COLORS, GridWrap, HudPill, PlayStage } from './_shared';
 import { usePausableScheduler } from './_pausable-scheduler';
 
@@ -63,7 +63,7 @@ export function ImageMemoryGame({
     if (paused || phase !== 'quiz' || completedRef.current) return;
     if (i === answer) {
       sfx.correct(soundEnabled);
-      const ns = score + Math.round(45 * difficultyMultiplier(difficulty) * round);
+      const ns = score + imageMemoryCorrectDelta(round, difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       if (round >= 5) {

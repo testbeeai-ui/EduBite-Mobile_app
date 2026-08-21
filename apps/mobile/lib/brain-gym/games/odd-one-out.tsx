@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
-import { difficultyMultiplier } from '../storage';
+import { oddOneOutCorrectDelta } from '../scoring';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
 import { COLORS, HudPill, PlayStage, SquareGrid } from './_shared';
@@ -39,7 +39,7 @@ export function OddOneOutGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const roundsNeeded = difficulty === 'easy' ? 5 : difficulty === 'medium' ? 7 : 9;
+  const roundsNeeded = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 8 : 10;
   const [round, setRound] = useState(() => generateRound());
   const [n, setN] = useState(1);
   const [lives, setLives] = useState(3);
@@ -53,7 +53,7 @@ export function OddOneOutGame({
     if (item === round.odd) {
       sfx.correct(soundEnabled);
       setFlash('good');
-      const ns = score + Math.round(30 * difficultyMultiplier(difficulty));
+      const ns = score + oddOneOutCorrectDelta(difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       setTimeout(() => {

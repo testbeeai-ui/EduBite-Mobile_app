@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
-import { difficultyMultiplier } from '../storage';
+import { speedMathCorrectDelta } from '../scoring';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
-import { usePausableScheduler } from './_pausable-scheduler';
 
 function makeQuestion(difficulty: GameComponentProps['difficulty']) {
   const max = difficulty === 'easy' ? 12 : difficulty === 'medium' ? 20 : 40;
@@ -45,15 +44,19 @@ export function SpeedMathGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const duration = difficulty === 'easy' ? 45000 : difficulty === 'medium' ? 40000 : 35000;
+  const duration =
+    difficulty === 'easy' ? 45_000 : difficulty === 'medium' ? 40_000 : 35_000;
   const [q, setQ] = useState(() => makeQuestion(difficulty));
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
-  const [combo, setCombo] = useState(0);
   const [left, setLeft] = useState(duration);
   const [start] = useState(() => Date.now());
   const done = useRef(false);
-  const { schedule } = usePausableScheduler(paused);
+  const scoreRef = useRef(0);
+
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
 
   useEffect(() => {
     if (paused || done.current) return;
@@ -63,31 +66,26 @@ export function SpeedMathGame({
       if (remain <= 0 && !done.current) {
         done.current = true;
         onComplete({
-          score,
-          won: score >= 100,
-          timeMs: Date.now() - start,
+          score: scoreRef.current,
+          won: false,
+          timeMs: duration,
           difficulty,
         });
       }
     }, 100);
     return () => clearInterval(id);
-  }, [paused, duration, start, score, onComplete, difficulty]);
+  }, [paused, duration, start, onComplete, difficulty]);
 
   const pick = (val: number) => {
     if (paused || done.current) return;
     if (val === q.answer) {
       sfx.correct(soundEnabled);
-      const nextCombo = combo + 1;
-      setCombo(nextCombo);
-      const ns =
-        score +
-        Math.round(20 * difficultyMultiplier(difficulty) * (1 + nextCombo * 0.1));
+      const ns = score + speedMathCorrectDelta(difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       setQ(makeQuestion(difficulty));
     } else {
       sfx.wrong(soundEnabled);
-      setCombo(0);
       const nl = lives - 1;
       setLives(nl);
       onLivesChange?.(nl);
@@ -101,7 +99,7 @@ export function SpeedMathGame({
   return (
     <View style={styles.board}>
       <Text style={styles.status}>
-        {Math.ceil(left / 1000)}s · Combo {combo} · Score {score}
+        {Math.ceil(left / 1000)}s · Lives {lives} · Score {score}
       </Text>
       <Text style={styles.eq}>{q.equation} = ?</Text>
       <View style={styles.grid}>
@@ -125,23 +123,32 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20,26,35,0.95)',
     justifyContent: 'center',
   },
-  status: { textAlign: 'center', color: '#8B96A8', fontWeight: '600' },
+  status: {
+    textAlign: 'center',
+    color: '#8B96A8',
+    marginBottom: 18,
+    fontWeight: '600',
+  },
   eq: {
     textAlign: 'center',
     color: '#EAEEF3',
     fontSize: 36,
     fontWeight: '800',
-    marginVertical: 28,
+    marginBottom: 24,
   },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+  },
   cell: {
-    width: '45%',
-    paddingVertical: 22,
-    borderRadius: 16,
-    backgroundColor: '#171E28',
+    width: '42%',
+    minHeight: 64,
+    borderRadius: 14,
+    backgroundColor: '#1B2330',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
   },
-  opt: { color: '#fff', fontSize: 24, fontWeight: '800' },
+  opt: { color: '#EAEEF3', fontSize: 24, fontWeight: '700' },
 });

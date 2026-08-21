@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { sfx } from '../utils/sound';
-import { difficultyMultiplier } from '../storage';
+import { numberFlashCorrectDelta } from '../scoring';
 import { COLORS, HudPill, PlayStage, PrimaryButton } from './_shared';
 import { usePausableScheduler } from './_pausable-scheduler';
 
@@ -59,7 +59,7 @@ export function NumberFlashGame({
     const target = seq.join('');
     if (answer.replace(/\s/g, '') === target) {
       sfx.correct(soundEnabled);
-      const ns = score + Math.round(50 * difficultyMultiplier(difficulty) * round);
+      const ns = score + numberFlashCorrectDelta(round, difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       if (round >= 5) {

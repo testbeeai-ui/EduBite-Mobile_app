@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
-import { difficultyMultiplier } from '../storage';
+import { sudokuWinScore } from '../scoring';
 import { sfx } from '../utils/sound';
 import { SquareGrid } from './_shared';
 
@@ -45,7 +45,6 @@ function makePuzzle(difficulty: GameComponentProps['difficulty']): {
   solution: number[];
 } {
   const solution = emptyGrid();
-  // seed diagonal boxes
   for (let box = 0; box < 2; box++) {
     const nums = [1, 2, 3, 4].sort(() => Math.random() - 0.5);
     let k = 0;
@@ -71,10 +70,12 @@ export function SudokuGame({
   onScoreChange,
   paused,
 }: GameComponentProps) {
+  const maxMistakes = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 2 : 1;
   const puzzle = useState(() => makePuzzle(difficulty))[0];
   const [grid, setGrid] = useState<Cell[]>(() => [...puzzle.given]);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
   const [start] = useState(() => Date.now());
   const done = useRef(false);
 
@@ -87,6 +88,18 @@ export function SudokuGame({
       val,
     )) {
       sfx.wrong(soundEnabled);
+      const nextMistakes = mistakes + 1;
+      setMistakes(nextMistakes);
+      if (nextMistakes >= maxMistakes) {
+        done.current = true;
+        onScoreChange?.(0);
+        onComplete({
+          score: 0,
+          won: false,
+          timeMs: Date.now() - start,
+          difficulty,
+        });
+      }
       return;
     }
     sfx.tap(soundEnabled);
@@ -96,18 +109,26 @@ export function SudokuGame({
     const filled = next.every((v) => v != null);
     const correct = next.every((v, i) => v === puzzle.solution[i]);
     if (filled && correct) {
-      const ns = Math.round(400 * difficultyMultiplier(difficulty));
+      const timeMs = Date.now() - start;
+      const ns = sudokuWinScore({
+        difficulty,
+        timeMs,
+        mistakes,
+        hintsUsed: 0,
+      });
       setScore(ns);
       onScoreChange?.(ns);
       done.current = true;
       sfx.win(soundEnabled);
-      onComplete({ score: ns, won: true, timeMs: Date.now() - start, difficulty });
+      onComplete({ score: ns, won: true, timeMs, difficulty });
     }
   };
 
   return (
     <View style={styles.board}>
-      <Text style={styles.status}>4×4 Sudoku · Score {score}</Text>
+      <Text style={styles.status}>
+        4×4 Sudoku · Score {score} · Mistakes {mistakes}/{maxMistakes}
+      </Text>
       <SquareGrid cols={4} rows={4} gap={8} minCell={64} style={styles.gridHost}>
         {({ cell }) =>
           grid.map((v, i) => {
@@ -139,7 +160,7 @@ export function SudokuGame({
       <View style={styles.pad}>
         {[1, 2, 3, 4].map((n) => (
           <Pressable key={n} style={styles.key} onPress={() => place(n)}>
-            <Text style={styles.keyText}>{n}</Text>
+            <Text style={styles.keyTxt}>{n}</Text>
           </Pressable>
         ))}
       </View>
@@ -155,34 +176,42 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     padding: 16,
     backgroundColor: 'rgba(20,26,35,0.95)',
-    justifyContent: 'center',
   },
-  status: { textAlign: 'center', color: '#8B96A8', marginBottom: 14, fontWeight: '600' },
+  status: {
+    textAlign: 'center',
+    color: '#8B96A8',
+    marginBottom: 12,
+    fontWeight: '600',
+  },
   gridHost: {
-    maxWidth: 320,
+    flex: 1,
+    minHeight: 280,
+    maxWidth: 360,
     alignSelf: 'center',
     width: '100%',
-    minHeight: 260,
   },
   cell: {
-    borderRadius: 12,
-    backgroundColor: '#171E28',
+    borderRadius: 10,
+    backgroundColor: '#1B2330',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
   },
-  cellSel: { borderColor: '#7F77DD' },
-  cellGiven: { backgroundColor: '#1B2330' },
-  num: { color: '#EAEEF3', fontSize: 24, fontWeight: '800' },
-  pad: { flexDirection: 'row', gap: 10, marginTop: 18, justifyContent: 'center' },
+  cellSel: { borderWidth: 2, borderColor: '#2DD4BF' },
+  cellGiven: { backgroundColor: '#151B24' },
+  num: { color: '#EAEEF3', fontWeight: '700' },
+  pad: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
   key: {
-    width: 64,
+    width: 56,
     height: 48,
-    borderRadius: 14,
-    backgroundColor: '#378ADD',
+    borderRadius: 12,
+    backgroundColor: '#243041',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  keyText: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  keyTxt: { color: '#EAEEF3', fontSize: 20, fontWeight: '700' },
 });

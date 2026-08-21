@@ -9,7 +9,7 @@ import {
   scoreRecallReaderAnswer,
 } from "../recall-reader-content";
 import type { RecallReaderItem } from "../recall-reader-content";
-import { difficultyMultiplier } from "../storage";
+import { difficultyMultiplier } from "../scoring";
 import { sfx } from "../utils/sound";
 import { ChoiceButton, COLORS, HudPill, PlayStage } from "./_shared";
 import { usePausableScheduler } from "./_pausable-scheduler";

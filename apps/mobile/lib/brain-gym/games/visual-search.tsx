@@ -1,18 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { GameComponentProps } from "../types";
-import { difficultyMultiplier } from "../storage";
-import { range } from "../utils";
-import { sfx } from "../utils/sound";
-import { COLORS, HudPill, PlayStage, SquareGrid } from "./_shared";
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { GameComponentProps } from '../types';
+import {
+  visualSearchPartialScore,
+  visualSearchWinScore,
+} from '../scoring';
+import { range } from '../utils';
+import { sfx } from '../utils/sound';
+import { COLORS, HudPill, PlayStage, SquareGrid } from './_shared';
 
 const SWATCHES = [
-  "#60a5fa",
-  "#f472b6",
-  "#2dd4bf",
-  "#fbbf24",
-  "#a78bfa",
-  "#ef4444",
+  '#60a5fa',
+  '#f472b6',
+  '#2dd4bf',
+  '#fbbf24',
+  '#a78bfa',
+  '#ef4444',
 ];
 
 export function VisualSearchGame({
@@ -23,53 +26,52 @@ export function VisualSearchGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const size = difficulty === "easy" ? 4 : difficulty === "medium" ? 5 : 6;
+  const size = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
   const cells = size * size;
-  const duration = difficulty === "hard" ? 25000 : 30000;
+  const numTargets = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 6 : 8;
+  const duration =
+    difficulty === 'easy' ? 45_000 : difficulty === 'medium' ? 40_000 : 35_000;
   const [target, setTarget] = useState(SWATCHES[0]!);
   const [grid, setGrid] = useState<string[]>([]);
   const [found, setFound] = useState(0);
-  const [needed, setNeeded] = useState(1);
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
   const [leftMs, setLeftMs] = useState(duration);
   const [start] = useState(() => Date.now());
   const done = useRef(false);
-  const scoreRef = useRef(0);
+  const foundRef = useRef(0);
 
   const gen = () => {
     const t = SWATCHES[Math.floor(Math.random() * SWATCHES.length)]!;
-    const need = difficulty === "easy" ? 3 : difficulty === "medium" ? 4 : 5;
     const g = range(cells).map(
       () => SWATCHES[Math.floor(Math.random() * SWATCHES.length)]!,
     );
-    for (let i = 0; i < need; i++) g[i] = t;
+    for (let i = 0; i < numTargets; i++) g[i] = t;
     for (let i = g.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [g[i], g[j]] = [g[j]!, g[i]!];
     }
     setTarget(t);
-    setNeeded(need);
     setFound(0);
+    foundRef.current = 0;
     setGrid(g);
   };
-
-  useEffect(() => {
-    scoreRef.current = score;
-  }, [score]);
 
   useEffect(() => {
     gen();
     const id = setInterval(() => {
       if (done.current || paused) return;
       const elapsed = Date.now() - start;
-      setLeftMs(Math.max(0, duration - elapsed));
+      const left = Math.max(0, duration - elapsed);
+      setLeftMs(left);
       if (elapsed >= duration) {
         done.current = true;
+        const partial = visualSearchPartialScore(foundRef.current);
+        onScoreChange?.(partial);
         onComplete({
-          score: scoreRef.current,
-          won: scoreRef.current >= 80,
-          timeMs: Date.now() - start,
+          score: partial,
+          won: foundRef.current >= numTargets,
+          timeMs: duration,
           difficulty,
         });
       }
@@ -83,23 +85,43 @@ export function VisualSearchGame({
     if (grid[i] === target) {
       sfx.correct(soundEnabled);
       const nextFound = found + 1;
-      const ns = score + Math.round(15 * difficultyMultiplier(difficulty));
-      setScore(ns);
-      onScoreChange?.(ns);
+      foundRef.current = nextFound;
+      const partial = visualSearchPartialScore(nextFound);
+      setScore(partial);
+      onScoreChange?.(partial);
       const nextGrid = [...grid];
-      nextGrid[i] = "cleared";
+      nextGrid[i] = 'cleared';
       setGrid(nextGrid);
       setFound(nextFound);
-      if (nextFound >= needed) gen();
-    } else if (grid[i] !== "cleared") {
+      if (nextFound >= numTargets) {
+        done.current = true;
+        const timeLeft = Math.max(0, duration - (Date.now() - start));
+        const finalScore = visualSearchWinScore({
+          numTargets,
+          timeLeftMs: timeLeft,
+          difficulty,
+        });
+        setScore(finalScore);
+        onScoreChange?.(finalScore);
+        onComplete({
+          score: finalScore,
+          won: true,
+          timeMs: Date.now() - start,
+          difficulty,
+        });
+      }
+    } else if (grid[i] !== 'cleared') {
       sfx.wrong(soundEnabled);
       const nl = lives - 1;
       setLives(nl);
       onLivesChange?.(nl);
       if (nl <= 0) {
         done.current = true;
+        const partial = visualSearchPartialScore(found);
+        setScore(partial);
+        onScoreChange?.(partial);
         onComplete({
-          score,
+          score: partial,
           won: false,
           timeMs: Date.now() - start,
           difficulty,
@@ -113,37 +135,32 @@ export function VisualSearchGame({
       <View style={styles.board}>
         <HudPill>
           <Text style={styles.hudText}>
-            Tap all matching tiles · {found}/{needed} ·{" "}
+            Tap all matching tiles · {found}/{numTargets} ·{' '}
             {Math.ceil(leftMs / 1000)}s
           </Text>
         </HudPill>
         <View style={styles.targetRow}>
-          <Text style={styles.targetLabel}>Target</Text>
-          <View style={[styles.targetSwatch, { backgroundColor: target }]} />
+          <View style={[styles.swatch, { backgroundColor: target }]} />
+          <Text style={styles.targetLabel}>Find this color · Score {score}</Text>
         </View>
-        <SquareGrid cols={size} rows={size} gap={8} minCell={48}>
+        <SquareGrid cols={size} rows={size} gap={6} minCell={44} style={styles.gridHost}>
           {({ cell }) =>
-            range(cells).map((i) => {
-              const cleared = grid[i] === "cleared";
-              return (
-                <Pressable
-                  key={i}
-                  onPress={() => tap(i)}
-                  disabled={cleared}
-                  style={[
-                    styles.cell,
-                    {
-                      width: cell,
-                      height: cell,
-                      backgroundColor: cleared
-                        ? "#0B0F16"
-                        : (grid[i] ?? COLORS.surface2),
-                      opacity: cleared ? 0.35 : 1,
-                    },
-                  ]}
-                />
-              );
-            })
+            grid.map((color, i) => (
+              <Pressable
+                key={i}
+                onPress={() => tap(i)}
+                disabled={color === 'cleared'}
+                style={[
+                  styles.cell,
+                  {
+                    width: cell,
+                    height: cell,
+                    backgroundColor: color === 'cleared' ? '#171E28' : color,
+                    opacity: color === 'cleared' ? 0.35 : 1,
+                  },
+                ]}
+              />
+            ))
           }
         </SquareGrid>
       </View>
@@ -157,28 +174,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.line,
-    backgroundColor: "rgba(20,26,35,0.95)",
+    backgroundColor: 'rgba(20,26,35,0.95)',
     padding: 14,
   },
-  hudText: { color: COLORS.text, fontWeight: "700", fontSize: 13 },
+  hudText: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
   targetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
     marginBottom: 12,
+    justifyContent: 'center',
   },
-  targetLabel: { color: COLORS.textDim, fontWeight: "600", fontSize: 12 },
-  targetSwatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.35)",
+  swatch: { width: 28, height: 28, borderRadius: 8 },
+  targetLabel: { color: COLORS.textDim, fontWeight: '600' },
+  gridHost: {
+    flex: 1,
+    minHeight: 260,
+    maxWidth: 360,
+    alignSelf: 'center',
+    width: '100%',
   },
-  cell: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
+  cell: { borderRadius: 8 },
 });

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { GameComponentProps } from "../types";
-import { difficultyMultiplier } from "../storage";
+import { matchShadowCorrectDelta } from "../scoring";
 import { shuffle } from "../utils";
 import { sfx } from "../utils/sound";
 import { COLORS, HudPill, PlayStage, SquareGrid } from "./_shared";
@@ -16,7 +16,7 @@ export function MatchShadowGame({
   onLivesChange,
   paused,
 }: GameComponentProps) {
-  const needed = difficulty === "easy" ? 5 : difficulty === "medium" ? 7 : 9;
+  const needed = difficulty === "easy" ? 5 : difficulty === "medium" ? 7 : 10;
   const [n, setN] = useState(1);
   const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
@@ -34,7 +34,7 @@ export function MatchShadowGame({
     if (paused || done.current) return;
     if (solid === round.answer) {
       sfx.correct(soundEnabled);
-      const ns = score + Math.round(35 * difficultyMultiplier(difficulty));
+      const ns = score + matchShadowCorrectDelta(difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       if (n >= needed) {

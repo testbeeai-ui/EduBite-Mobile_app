@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
-import { difficultyMultiplier } from '../storage';
+import { game2048FinalScore } from '../scoring';
 import { sfx } from '../utils/sound';
 import {
   canMove,
@@ -56,7 +56,12 @@ export function Game2048({
     const max = Math.max(...withSpawn.flat());
     if (max >= target) {
       done.current = true;
-      const final = Math.round(ns * difficultyMultiplier(difficulty));
+      const final = game2048FinalScore({
+        boardScore: ns,
+        maxTile: max,
+        won: true,
+        difficulty,
+      });
       sfx.win(soundEnabled);
       onComplete({
         score: final,
@@ -68,8 +73,14 @@ export function Game2048({
     }
     if (!canMove(withSpawn)) {
       done.current = true;
+      const final = game2048FinalScore({
+        boardScore: ns,
+        maxTile: max,
+        won: false,
+        difficulty,
+      });
       onComplete({
-        score: ns,
+        score: final,
         won: false,
         timeMs: Date.now() - start,
         difficulty,

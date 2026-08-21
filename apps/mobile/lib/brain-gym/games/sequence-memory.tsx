@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { GameComponentProps } from "../types";
 import { sfx } from "../utils/sound";
-import { difficultyMultiplier } from "../storage";
+import { sequenceMemoryCorrectDelta } from '../scoring';
 import { usePausableScheduler } from "./_pausable-scheduler";
 import { COLORS, PlayStage, SquareGrid } from "./_shared";
 
@@ -89,7 +89,7 @@ export function SequenceMemoryGame({
     if (next.length === seq.length) {
       sfx.correct(soundEnabled);
       const ns =
-        score + Math.round(10 * seq.length * difficultyMultiplier(difficulty));
+        score + sequenceMemoryCorrectDelta(seq.length, difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       if (

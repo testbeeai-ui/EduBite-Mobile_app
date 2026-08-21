@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
 import { shuffle, range } from '../utils/shuffle';
 import { sfx } from '../utils/sound';
-import { difficultyMultiplier } from '../storage';
+import { patternMemoryCorrectDelta } from '../scoring';
 import {
   CellButton,
   COLORS,
@@ -66,7 +66,7 @@ export function PatternMemoryGame({
     const ok = selected.size === pattern.size && [...selected].every((i) => pattern.has(i));
     if (ok) {
       sfx.correct(soundEnabled);
-      const ns = score + Math.round(40 * difficultyMultiplier(difficulty) * round);
+      const ns = score + patternMemoryCorrectDelta(round, difficulty);
       setScore(ns);
       onScoreChange?.(ns);
       if (round >= 5) {

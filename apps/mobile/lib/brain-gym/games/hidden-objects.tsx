@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GameComponentProps } from '../types';
-import { difficultyMultiplier } from '../storage';
+import {
+  hiddenObjectsPartialScore,
+  hiddenObjectsWinScore,
+} from '../scoring';
 import { shuffle } from '../utils';
 import { sfx } from '../utils/sound';
 import { COLORS, HudPill, PlayStage, SquareGrid } from './_shared';
@@ -68,8 +71,9 @@ export function HiddenObjectsGame({
   onScoreChange,
   paused,
 }: GameComponentProps) {
-  const count = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 5 : 6;
-  const duration = difficulty === 'hard' ? 35000 : 45000;
+  const count = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 6 : 8;
+  const duration =
+    difficulty === 'easy' ? 75_000 : difficulty === 'medium' ? 55_000 : 40_000;
   const scene = useMemo(() => buildScene(count), [count]);
   const [found, setFound] = useState<Set<string>>(() => new Set());
   const [score, setScore] = useState(0);
@@ -93,10 +97,12 @@ export function HiddenObjectsGame({
       setLeftMs(Math.max(0, duration - elapsed));
       if (elapsed >= duration) {
         done.current = true;
+        const partial = hiddenObjectsPartialScore(foundRef.current.size);
+        onScoreChange?.(partial);
         onComplete({
-          score: scoreRef.current,
-          won: foundRef.current.size >= count,
-          timeMs: Date.now() - start,
+          score: partial,
+          won: false,
+          timeMs: duration,
           difficulty,
         });
       }
@@ -118,15 +124,24 @@ export function HiddenObjectsGame({
     const next = new Set(found);
     next.add(cell.emoji);
     setFound(next);
-    const ns = score + Math.round(40 * difficultyMultiplier(difficulty));
-    setScore(ns);
-    onScoreChange?.(ns);
+    const partial = hiddenObjectsPartialScore(next.size);
+    setScore(partial);
+    onScoreChange?.(partial);
     if (next.size >= count) {
       done.current = true;
+      const elapsed = Date.now() - start;
+      const finalScore = hiddenObjectsWinScore({
+        targetCount: count,
+        timeLimitMs: duration,
+        elapsedMs: elapsed,
+        difficulty,
+      });
+      setScore(finalScore);
+      onScoreChange?.(finalScore);
       onComplete({
-        score: ns,
+        score: finalScore,
         won: true,
-        timeMs: Date.now() - start,
+        timeMs: elapsed,
         difficulty,
       });
     }
