@@ -19,6 +19,26 @@ function asStr(v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v : fallback;
 }
 
+function normalizeDoseDayLog(raw: unknown): GameState['doseDayLog'] {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: GameState['doseDayLog'] = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue;
+    const row = value as Record<string, unknown>;
+    const total = Math.max(0, asNum(row.total, 0));
+    const correct = Math.max(0, asNum(row.correct, 0));
+    out[key] = {
+      correct,
+      total,
+      pct: asNum(row.pct, total > 0 ? Math.round((100 * correct) / total) : 0),
+      completed: asBool(row.completed),
+      classLevel: row.classLevel === '12' ? '12' : '11',
+      graded: asBool(row.graded, asBool(row.completed)),
+    };
+  }
+  return out;
+}
+
 export function hydrateGameState(
   payload: Record<string, unknown> | null | undefined,
   rewardMap?: Record<string, { amount?: number }>,
@@ -79,6 +99,9 @@ export function hydrateGameState(
     answers12: Array.isArray(doseRaw.answers12)
       ? (doseRaw.answers12 as number[])
       : [],
+    answerCorrect: Array.isArray(doseRaw.answerCorrect)
+      ? (doseRaw.answerCorrect as boolean[]).map(Boolean)
+      : [],
   };
 
   const fbRaw = (payload.funbrain || {}) as Record<string, unknown>;
@@ -95,6 +118,10 @@ export function hydrateGameState(
     completed: asBool(fbRaw.completed),
     running: false,
     timeLeft: asNum(fbRaw.timeLeft, base.funbrain.timeLeft),
+    answerCorrect: Array.isArray(fbRaw.answerCorrect)
+      ? (fbRaw.answerCorrect as boolean[]).map(Boolean)
+      : [],
+    correctCount: asNum(fbRaw.correctCount, 0),
   };
 
   const today = todayKey();
@@ -124,10 +151,7 @@ export function hydrateGameState(
     doseRdmCredited: asNum(payload.doseRdmCredited, 0),
     funbrainRdmCredited: asNum(payload.funbrainRdmCredited, 0),
     puzzleCompleted: asBool(payload.puzzleCompleted),
-    doseDayLog:
-      payload.doseDayLog && typeof payload.doseDayLog === 'object'
-        ? (payload.doseDayLog as GameState['doseDayLog'])
-        : {},
+    doseDayLog: normalizeDoseDayLog(payload.doseDayLog),
     dayCriteriaLog:
       payload.dayCriteriaLog && typeof payload.dayCriteriaLog === 'object'
         ? (payload.dayCriteriaLog as GameState['dayCriteriaLog'])

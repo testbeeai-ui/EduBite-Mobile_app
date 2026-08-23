@@ -22,10 +22,13 @@ import {
 } from '../../lib/content/today-questions';
 import { useGame } from '../../lib/game/GameProvider';
 import { todayKey } from '../../lib/game/date';
+import { doseResultView } from '../../lib/game/dose-result';
 import { DOSE_DURATION_SEC } from '../../lib/game/state';
+import { useAuth } from '../../lib/auth/AuthProvider';
 
 export default function DailyDoseScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const {
     state,
     rewardMap,
@@ -33,6 +36,7 @@ export default function DailyDoseScreen() {
     setClassLevel,
     startDose,
     resetDose,
+    saving,
   } = useGame();
   const dosePerCorrect = rewardMap['dose.per_correct']?.amount ?? 10;
   const doseMinutes = Math.round(DOSE_DURATION_SEC / 60);
@@ -114,7 +118,6 @@ export default function DailyDoseScreen() {
       await completeDose({
         classLevel,
         answers: finalAnswers,
-        correct: 0,
         total: questions.length,
       });
       setIsFinished(true);
@@ -191,13 +194,23 @@ export default function DailyDoseScreen() {
   const showCompleted = classDone || isFinished;
   const displayAnswers = savedAnswers.length ? savedAnswers : answers;
   const answeredCount = displayAnswers.filter((a) => typeof a === 'number').length;
+  const result = doseResultView({
+    signedIn: Boolean(user?.id),
+    classLevel,
+    dayLog,
+    questionCount: questions.length || answeredCount,
+    saving,
+  });
   const displayCorrect =
-    dayLog?.classLevel === classLevel ? dayLog.correct : 0;
-  const displayTotal =
-    dayLog?.classLevel === classLevel
-      ? dayLog.total
-      : questions.length || answeredCount;
-  const earnedRdm = displayCorrect * dosePerCorrect;
+    result.status === 'graded'
+      ? result.correct
+      : classLevel === '12'
+        ? state.dose.correct12
+        : state.dose.correct11;
+  const displayTotal = result.total || questions.length || answeredCount;
+  const earnedRdm =
+    result.status === 'graded' ? displayCorrect * dosePerCorrect : 0;
+  const answerCorrect = state.dose.answerCorrect;
 
   const currentQ = questions[idx];
 
@@ -317,16 +330,18 @@ export default function DailyDoseScreen() {
           <View style={styles.completeCard}>
             <View style={styles.completeWrap}>
               <Text style={styles.earnedBig}>
-                {dayLog?.classLevel === classLevel
+                {result.status === 'graded'
                   ? `${earnedRdm} RDM earned today`
-                  : 'Dose submitted'}
+                  : result.status === 'unsigned'
+                    ? 'Sign in to see your score'
+                    : 'Scoring your exam…'}
               </Text>
               <Text style={styles.completeSub}>
-                {answeredCount} of {displayTotal || questions.length || 5} answered
-                {dayLog?.classLevel === classLevel
-                  ? ` · ${displayCorrect} correct after server grade`
-                  : ' · scoring syncs when session can save'}
-                . Finish Fun Brain, Puzzles, Habits, and Pledge too for streak.
+                {result.status === 'graded'
+                  ? `${displayCorrect} of ${displayTotal || questions.length || 5} correct today. Finish Fun Brain, Puzzles, Habits, and Pledge too to count today toward your streak.`
+                  : result.status === 'unsigned'
+                    ? 'Google login is required to save and score this exam.'
+                    : `${answeredCount} of ${displayTotal || questions.length || 5} answered · saving your result.`}
               </Text>
               {scheduleDate ? (
                 <Text style={styles.scheduleLine}>DB schedule · {scheduleDate}</Text>
@@ -341,7 +356,11 @@ export default function DailyDoseScreen() {
             </View>
           </View>
 
-          <AnswerReviewList questions={questions} answers={displayAnswers} />
+          <AnswerReviewList
+            questions={questions}
+            answers={displayAnswers}
+            answerCorrect={result.status === 'graded' ? answerCorrect : undefined}
+          />
         </>
       ) : !running ? (
         <View style={styles.startCard}>

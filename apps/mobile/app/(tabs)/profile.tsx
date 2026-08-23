@@ -147,38 +147,43 @@ export default function ProfileScreen() {
 
       <Text style={styles.secHeading}>Learning Statistics</Text>
 
-      <View style={styles.statGrid}>
-        <View style={styles.statBox}>
-          <View style={[styles.statIc, { backgroundColor: theme.colors.amberSoft }]}>
-            <Text style={{ color: theme.colors.amber, fontSize: 14 }}>🔥</Text>
+      <View style={styles.statCard}>
+        <View style={styles.statGrid}>
+          <View style={styles.statBox}>
+            <View style={[styles.statIc, { backgroundColor: theme.colors.amberSoft }]}>
+              <Text style={{ color: theme.colors.amber, fontSize: 14 }}>🔥</Text>
+            </View>
+            <Text style={styles.statVal}>{state.streak}</Text>
+            <Text style={styles.statLbl}>Day Streak</Text>
           </View>
-          <Text style={styles.statVal}>{state.streak}</Text>
-          <Text style={styles.statLbl}>Day Streak</Text>
-        </View>
-        <View style={styles.statBox}>
-          <View style={[styles.statIc, { backgroundColor: theme.colors.purpleSoft }]}>
-            <Text style={{ color: theme.colors.purple, fontSize: 14 }}>⚡</Text>
+          <View style={styles.statBox}>
+            <View style={[styles.statIc, { backgroundColor: theme.colors.purpleSoft }]}>
+              <Text style={{ color: theme.colors.purple, fontSize: 14 }}>⚡</Text>
+            </View>
+            <Text style={styles.statVal}>{funBest}</Text>
+            <Text style={styles.statLbl}>FunBrain Best</Text>
           </View>
-          <Text style={styles.statVal}>{funBest}</Text>
-          <Text style={styles.statLbl}>FunBrain Best</Text>
-        </View>
-        <View style={styles.statBox}>
-          <View style={[styles.statIc, { backgroundColor: theme.colors.tealSoft }]}>
-            <Text style={{ color: theme.colors.teal, fontSize: 14 }}>✓</Text>
+          <View style={styles.statBox}>
+            <View style={[styles.statIc, { backgroundColor: theme.colors.tealSoft }]}>
+              <Text style={{ color: theme.colors.teal, fontSize: 14 }}>✓</Text>
+            </View>
+            <Text style={styles.statVal}>
+              {habitsChecked}/{habitsTotal}
+            </Text>
+            <Text style={styles.statLbl}>Habits Today</Text>
           </View>
-          <Text style={styles.statVal}>{habitsChecked}/{habitsTotal}</Text>
-          <Text style={styles.statLbl}>Habits Today</Text>
-        </View>
-        <View style={styles.statBox}>
-          <View style={[styles.statIc, { backgroundColor: theme.colors.tealSoft }]}>
-            <Text style={{ color: theme.colors.teal, fontSize: 14 }}>🏆</Text>
+          <View style={styles.statBox}>
+            <View style={[styles.statIc, { backgroundColor: theme.colors.tealSoft }]}>
+              <Text style={{ color: theme.colors.teal, fontSize: 14 }}>🏆</Text>
+            </View>
+            <Text style={styles.statVal}>{achievementCount}</Text>
+            <Text style={styles.statLbl}>Achievements</Text>
           </View>
-          <Text style={styles.statVal}>{achievementCount}</Text>
-          <Text style={styles.statLbl}>Achievements</Text>
         </View>
+        <Text style={styles.metaLine}>
+          {fullDays} full days logged · {rdm} RDM total
+        </Text>
       </View>
-
-      <Text style={styles.metaLine}>{fullDays} full days logged · {rdm} RDM total</Text>
 
       <TouchableOpacity style={styles.linkCard} activeOpacity={0.7} onPress={() => router.navigate('/achievements')}>
         <View>
@@ -307,14 +312,67 @@ const styles = StyleSheet.create({
   rdmTrack: { height: 8, borderRadius: 99, backgroundColor: theme.colors.cardHi, overflow: 'hidden', marginTop: 14, flexDirection: 'row' },
   rdmFill: { height: '100%', borderRadius: 99 },
 
-  secHeading: { fontSize: 14, fontWeight: '700', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.borderSoft, color: theme.colors.text, fontFamily: theme.fonts.body },
-  metaLine: { fontSize: 11, color: theme.colors.textFaint, marginBottom: 14, fontFamily: theme.fonts.body },
+  secHeading: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSoft,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.body,
+  },
+  statCard: {
+    backgroundColor: theme.colors.card,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 18,
+    paddingTop: 14,
+    paddingHorizontal: 10,
+    paddingBottom: 12,
+    marginBottom: 16,
+  },
+  metaLine: {
+    fontSize: 11,
+    color: theme.colors.textFaint,
+    marginTop: 4,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
+  },
 
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5, marginBottom: 10 },
-  statBox: { width: '50%', paddingHorizontal: 5, marginBottom: 10 },
-  statIc: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  statVal: { fontFamily: theme.fonts.heading, fontWeight: '800', fontSize: 19, color: theme.colors.text },
-  statLbl: { fontSize: 10.5, color: theme.colors.textFaint, marginTop: 2, fontFamily: theme.fonts.body },
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  statBox: {
+    width: '50%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  statIc: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  statVal: {
+    fontFamily: theme.fonts.heading,
+    fontWeight: '800',
+    fontSize: 20,
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  statLbl: {
+    fontSize: 11,
+    color: theme.colors.textFaint,
+    marginTop: 3,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
+  },
 
   linkCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 15, paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10 },
   linkLbl: { fontSize: 10, fontWeight: '800', letterSpacing: 0.4, marginBottom: 4, fontFamily: theme.fonts.body },

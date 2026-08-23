@@ -116,7 +116,7 @@ function RootGate() {
     return <Slot />;
   }
 
-  // Release / preview APKs never skip login. Skip is __DEV__-only (Expo Go UI tour).
+  // Controlled by EXPO_PUBLIC_SKIP_AUTH (1 = off, 0 = on). Flip in .env / eas.json.
   const requireGoogleLogin = !SKIP_LOGIN_FOR_PREVIEW;
 
   if (requireGoogleLogin && loading) {

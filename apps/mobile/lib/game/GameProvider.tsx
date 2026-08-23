@@ -50,13 +50,12 @@ type GameContextValue = {
   completeDose: (args: {
     classLevel: '11' | '12';
     answers: number[];
-    correct: number;
     total: number;
   }) => Promise<void>;
   completeFunbrain: (args: {
     answers: (number | null)[];
-    score: number;
-    combo: number;
+    score?: number;
+    combo?: number;
   }) => Promise<void>;
   toggleHabit: (habitId: string) => Promise<void>;
   completePuzzle: () => Promise<void>;
@@ -121,6 +120,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setSaving(false);
     }
   }, [rewardMap, user?.id]);
+
+  const persistImmediate = useCallback(
+    async (next: GameState) => {
+      if (persistTimer.current) {
+        clearTimeout(persistTimer.current);
+        persistTimer.current = null;
+      }
+      await persist(next);
+    },
+    [persist],
+  );
 
   const queuePersist = useCallback(
     (next: GameState) => {
@@ -212,57 +222,58 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   const completeDose: GameContextValue['completeDose'] = useCallback(
-    async ({ classLevel, answers, correct, total }) => {
-      const today = todayKey();
-      apply((prev) => ({
-        ...prev,
+    async ({ classLevel, answers, total }) => {
+      const snapshot = rollDayIfNeeded(stateRef.current);
+      const next = withDerived({
+        ...snapshot,
         dose: {
-          ...prev.dose,
+          ...snapshot.dose,
           currentClass: classLevel,
           classChosen: true,
           completed: true,
-          completed11: classLevel === '11' ? true : prev.dose.completed11,
-          completed12: classLevel === '12' ? true : prev.dose.completed12,
-          correct,
-          answers11: classLevel === '11' ? answers : prev.dose.answers11,
-          answers12: classLevel === '12' ? answers : prev.dose.answers12,
+          completed11: classLevel === '11' ? true : snapshot.dose.completed11,
+          completed12: classLevel === '12' ? true : snapshot.dose.completed12,
+          correct: classLevel === '11' ? snapshot.dose.correct11 : snapshot.dose.correct12,
+          answerCorrect: [],
+          answers11: classLevel === '11' ? answers : snapshot.dose.answers11,
+          answers12: classLevel === '12' ? answers : snapshot.dose.answers12,
           running: false,
           locked: true,
           index: Math.max(0, total - 1),
         },
-        doseDayLog: {
-          ...prev.doseDayLog,
-          [today]: {
-            correct,
-            total: Math.max(total, DOSE_QUESTION_COUNT),
-            pct: total > 0 ? Math.round((correct / total) * 100) : 0,
-            completed: true,
-            classLevel,
-          },
-        },
-      }));
+      });
+      setState(next);
+      stateRef.current = next;
+      await persistImmediate(next);
     },
-    [apply],
+    [persistImmediate],
   );
 
   const completeFunbrain: GameContextValue['completeFunbrain'] = useCallback(
     async ({ answers, score, combo }) => {
-      apply((prev) => ({
-        ...prev,
+      const snapshot = rollDayIfNeeded(stateRef.current);
+      const optimisticScore = Math.max(0, score ?? 0);
+      const next = withDerived({
+        ...snapshot,
         funbrain: {
-          ...prev.funbrain,
+          ...snapshot.funbrain,
           answers,
-          score,
-          combo,
-          highScore: Math.max(prev.funbrain.highScore, score),
+          score: optimisticScore,
+          combo: Math.max(0, combo ?? 0),
+          highScore: Math.max(snapshot.funbrain.highScore, optimisticScore),
+          correctCount: snapshot.funbrain.correctCount,
+          answerCorrect: [],
           completed: true,
           finished: true,
           running: false,
           currentQuestionIndex: Math.max(0, answers.length - 1),
         },
-      }));
+      });
+      setState(next);
+      stateRef.current = next;
+      await persistImmediate(next);
     },
-    [apply],
+    [persistImmediate],
   );
 
   const toggleHabit: GameContextValue['toggleHabit'] = useCallback(
@@ -320,6 +331,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             locked: false,
             correct: 0,
             completed: false,
+            answerCorrect: [],
           },
         };
       },
@@ -343,6 +355,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             answers: [],
             finished: false,
             completed: false,
+            answerCorrect: [],
+            correctCount: 0,
           },
         };
       },
@@ -368,6 +382,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           completed12: !is11 ? false : prev.dose.completed12,
           answers11: is11 ? [] : prev.dose.answers11,
           answers12: !is11 ? [] : prev.dose.answers12,
+          answerCorrect: [],
         },
       };
     }, false);
@@ -387,6 +402,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           answers: [],
           finished: false,
           completed: false,
+          answerCorrect: [],
+          correctCount: 0,
         },
       }),
       false,

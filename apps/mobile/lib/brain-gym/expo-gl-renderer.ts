@@ -36,9 +36,22 @@ export function createExpoGlCanvas(gl: ExpoWebGLRenderingContext): ExpoGlCanvas 
   };
 }
 
+/**
+ * Expo GL only implements UNPACK_FLIP_Y_WEBGL. Three.js also calls UNPACK_ALIGNMENT
+ * (and similar), which spam "doesn't support this parameter yet!" — safe to ignore.
+ */
+export function silenceUnsupportedPixelStorei(gl: ExpoWebGLRenderingContext): void {
+  const flipY = gl.UNPACK_FLIP_Y_WEBGL;
+  const original = gl.pixelStorei.bind(gl);
+  gl.pixelStorei = ((pname: number, param: number) => {
+    if (pname === flipY) original(pname, param);
+  }) as typeof gl.pixelStorei;
+}
+
 export function createHubSceneRenderer(gl: ExpoWebGLRenderingContext) {
   const canvas = createExpoGlCanvas(gl);
   Object.assign(gl, { canvas });
+  silenceUnsupportedPixelStorei(gl);
 
   const renderer = new THREE.WebGLRenderer({
     canvas: canvas as unknown as HTMLCanvasElement,

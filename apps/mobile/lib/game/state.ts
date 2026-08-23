@@ -47,6 +47,7 @@ export function createInitialState(rewardMap?: Record<string, { amount?: number 
       classChosen: false,
       answers11: [],
       answers12: [],
+      answerCorrect: [],
     },
     funbrain: {
       running: false,
@@ -58,6 +59,8 @@ export function createInitialState(rewardMap?: Record<string, { amount?: number 
       answers: [],
       finished: false,
       completed: false,
+      answerCorrect: [],
+      correctCount: 0,
     },
     history: [],
     joinedDate: today,

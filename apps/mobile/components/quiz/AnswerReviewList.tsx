@@ -10,9 +10,11 @@ import type { LearnerQuestion } from '../../lib/content/today-questions';
 export function AnswerReviewList({
   questions,
   answers,
+  answerCorrect,
 }: {
   questions: LearnerQuestion[];
   answers: Array<number | null | undefined>;
+  answerCorrect?: boolean[];
 }) {
   if (questions.length === 0) {
     return <Text style={styles.empty}>Loading review…</Text>;
@@ -27,6 +29,8 @@ export function AnswerReviewList({
       {questions.map((item, idx) => {
         const selectedIdx = answers[idx];
         const hasAnswer = selectedIdx !== undefined && selectedIdx !== null;
+        const graded = Array.isArray(answerCorrect) && idx < answerCorrect.length;
+        const isRight = graded ? Boolean(answerCorrect[idx]) : null;
 
         return (
           <View key={item.id || `q-${idx}`} style={styles.card}>
@@ -38,6 +42,14 @@ export function AnswerReviewList({
               {!hasAnswer ? (
                 <View style={styles.badgeMuted}>
                   <Text style={styles.badgeMutedText}>Unanswered</Text>
+                </View>
+              ) : isRight === true ? (
+                <View style={styles.badgeTeal}>
+                  <Text style={styles.badgeTealText}>Correct</Text>
+                </View>
+              ) : isRight === false ? (
+                <View style={styles.badgeWrong}>
+                  <Text style={styles.badgeWrongText}>Incorrect</Text>
                 </View>
               ) : (
                 <View style={styles.badgeTeal}>
@@ -65,7 +77,21 @@ export function AnswerReviewList({
                       </Text>
                     </View>
                     {isUserSelection ? (
-                      <Text style={styles.markPicked}>Your Pick</Text>
+                      <Text
+                        style={
+                          isRight === false
+                            ? styles.markWrong
+                            : isRight === true
+                              ? styles.markRight
+                              : styles.markPicked
+                        }
+                      >
+                        {isRight === false
+                          ? 'Your pick'
+                          : isRight === true
+                            ? 'Correct'
+                            : 'Your Pick'}
+                      </Text>
                     ) : null}
                   </View>
                 );
@@ -147,6 +173,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: theme.colors.teal,
+    textTransform: 'uppercase',
+    fontFamily: theme.fonts.body,
+  },
+  badgeWrong: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(220, 80, 100, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 80, 100, 0.3)',
+  },
+  badgeWrongText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: theme.colors.pink,
     textTransform: 'uppercase',
     fontFamily: theme.fonts.body,
   },

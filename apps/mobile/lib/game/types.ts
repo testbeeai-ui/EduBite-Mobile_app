@@ -41,6 +41,8 @@ export type DoseState = {
   classChosen: boolean;
   answers11: number[];
   answers12: number[];
+  /** Per-question correctness from server grade; never derived on device. */
+  answerCorrect: boolean[];
 };
 
 export type FunBrainState = {
@@ -53,6 +55,10 @@ export type FunBrainState = {
   answers: (number | null)[];
   finished: boolean;
   completed: boolean;
+  /** Per-question correctness from server grade. */
+  answerCorrect: boolean[];
+  /** Count of correct FunBrain answers from server grade. */
+  correctCount: number;
 };
 
 export type DoseDayRecord = {
@@ -61,6 +67,8 @@ export type DoseDayRecord = {
   pct: number;
   completed: boolean;
   classLevel: '11' | '12';
+  /** Present on some mobile rows; web doseDayLog has no graded flag. */
+  graded?: boolean;
 };
 
 export type GameState = {
