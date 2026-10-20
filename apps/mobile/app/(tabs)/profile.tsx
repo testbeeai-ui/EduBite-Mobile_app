@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { theme } from '@edubite/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/AuthProvider';
+import { deleteMyEdubiteAccount } from '../../lib/account/delete-my-account';
 import { useGame } from '../../lib/game/GameProvider';
 import { isFullDay } from '../../lib/game/state';
 
@@ -18,6 +19,7 @@ export default function ProfileScreen() {
     loading: authLoading,
     signOut,
   } = useAuth();
+  const [deleting, setDeleting] = useState(false);
 
   const name =
     (isGoogleUser &&
@@ -108,7 +110,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.authBtnSecondary}
-            disabled={authLoading}
+            disabled={authLoading || deleting}
             onPress={() => {
               void signOut();
             }}
@@ -117,6 +119,43 @@ export default function ProfileScreen() {
               {authLoading ? 'Please wait…' : 'Sign out'}
             </Text>
           </TouchableOpacity>
+          {isGoogleUser ? (
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              disabled={authLoading || deleting}
+              onPress={() => {
+                Alert.alert(
+                  'Delete EduBite data',
+                  'This permanently deletes your EduBite scores, streaks, puzzles, Brain Gym progress, and rewards. Your Google login stays for Edublast. This cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => {
+                        const userId = user?.id;
+                        if (!userId) return;
+                        setDeleting(true);
+                        void deleteMyEdubiteAccount(userId).then(async (result) => {
+                          if (!result.ok) {
+                            setDeleting(false);
+                            Alert.alert('Could not delete', result.error);
+                            return;
+                          }
+                          await signOut();
+                          setDeleting(false);
+                        });
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text style={styles.deleteBtnText}>
+                {deleting ? 'Deleting…' : 'Delete account'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </LinearGradient>
       </View>
 
@@ -293,6 +332,21 @@ const styles = StyleSheet.create({
   },
   authBtnSecondaryText: {
     color: theme.colors.text,
+    fontWeight: '700',
+    fontSize: 13.5,
+    fontFamily: theme.fonts.body,
+  },
+  deleteBtn: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(220,60,60,0.45)',
+    backgroundColor: 'rgba(220,60,60,0.08)',
+  },
+  deleteBtnText: {
+    color: '#c0392b',
     fontWeight: '700',
     fontSize: 13.5,
     fontFamily: theme.fonts.body,

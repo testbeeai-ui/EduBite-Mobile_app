@@ -25,6 +25,7 @@ import {
   DOSE_QUESTION_COUNT,
   FUNBRAIN_DURATION_SEC,
   FUNBRAIN_QUESTION_COUNT,
+  createInitialState,
   getLevelInfo,
   rollDayIfNeeded,
   todayCriteria,
@@ -156,6 +157,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const refetch = useCallback(async () => {
     if (!user?.id) {
+      if (persistTimer.current) {
+        clearTimeout(persistTimer.current);
+        persistTimer.current = null;
+      }
+      setState(createInitialState());
       setLoading(false);
       return;
     }
