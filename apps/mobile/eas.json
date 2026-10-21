@@ -30,6 +30,7 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SKIP_AUTH": "0",
         "EXPO_PUBLIC_SUPABASE_URL": "https://bytsiknhtcnlxwzgqkrd.supabase.co",

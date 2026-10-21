@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@edubite/ui';
+import { BrandLogo } from '../brand/BrandLogo';
 import { useAuth } from '../../lib/auth/AuthProvider';
 
 /**
@@ -33,9 +34,9 @@ export function LoginGate() {
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.card}>
-        <Text style={styles.brand}>
-          Edu<Text style={styles.brandHi}>bite</Text>
-        </Text>
+        <View style={styles.logoWrap}>
+          <BrandLogo place="login" />
+        </View>
         <Text style={styles.title}>Sign in to continue</Text>
         <Text style={styles.sub}>
           Use Google — same account as Edubite web. Progress and challenges sync
@@ -92,14 +93,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
     padding: 22,
   },
-  brand: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: theme.colors.text,
-    fontFamily: theme.fonts.heading,
-    marginBottom: 12,
+  logoWrap: {
+    marginBottom: 14,
   },
-  brandHi: { color: theme.colors.purple },
   title: {
     fontSize: 18,
     fontWeight: '700',

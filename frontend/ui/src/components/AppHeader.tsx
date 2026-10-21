@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { theme } from '../theme';
 
@@ -10,6 +10,7 @@ export const AppHeader = ({
   unreadCount = 0,
   showLogin = false,
   loginLabel = 'Login',
+  logo,
 }: {
   onOpenDrawer?: () => void;
   onOpenNotifications?: () => void;
@@ -19,6 +20,8 @@ export const AppHeader = ({
   /** When true, show Google/login CTA instead of Learner chip. */
   showLogin?: boolean;
   loginLabel?: string;
+  /** Replaces the text wordmark. */
+  logo?: ReactNode;
 }) => {
   return (
     <View style={styles.container}>
@@ -34,9 +37,11 @@ export const AppHeader = ({
           <TouchableOpacity style={styles.hbtn} onPress={onOpenDrawer}>
             <Text style={styles.hbtnText}>☰</Text>
           </TouchableOpacity>
-          <Text style={styles.wordmark}>
-            Edu<Text style={styles.wordmarkHighlight}>bite</Text>
-          </Text>
+          {logo ?? (
+            <Text style={styles.wordmark}>
+              Edu<Text style={styles.wordmarkHighlight}>bite</Text>
+            </Text>
+          )}
         </View>
 
         <View style={styles.right}>

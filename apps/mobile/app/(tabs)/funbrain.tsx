@@ -155,9 +155,10 @@ export default function FunBrainScreen() {
     setAnswered(true);
     setSelectedOpt(i);
 
-    // Participation score only — no client answer keys.
-    const nextCombo = combo + 1;
-    const nextScore = score + 10 + combo * 5;
+    const question = questions[idx];
+    const isCorrect = question?.correct != null && i === question.correct;
+    const nextCombo = isCorrect ? combo + 1 : 0;
+    const nextScore = isCorrect ? score + 10 + combo * 5 : score;
     const nextAnswers = [...answers];
     nextAnswers[idx] = i;
     setAnswers(nextAnswers);
@@ -179,6 +180,10 @@ export default function FunBrainScreen() {
   const displayScore = alreadyCompleted ? state.funbrain.score : score;
   const displayAnswers = alreadyCompleted ? state.funbrain.answers : answers;
   const answeredCount = displayAnswers.filter((a) => a != null).length;
+  const correctCount = questions.reduce((count, question, index) => {
+    if (question.correct == null) return count;
+    return displayAnswers[index] === question.correct ? count + 1 : count;
+  }, 0);
   const currentQ = questions[idx];
 
   const getOptionState = (optIndex: number): OptionState => {
@@ -223,8 +228,8 @@ export default function FunBrainScreen() {
             <View style={styles.completeWrap}>
               <Text style={styles.earnedBig}>Score: {displayScore}</Text>
               <Text style={styles.completeSub}>
-                {answeredCount} of {questions.length || answeredCount || 6} answered ·
-                one sprint per day. Come back tomorrow for the next set.
+                {correctCount} of {questions.length || answeredCount || 6} correct ·{' '}
+                {answeredCount} answered. Points go up only on a right answer.
               </Text>
               {scheduleDate ? (
                 <Text style={styles.scheduleLine}>DB schedule · {scheduleDate}</Text>

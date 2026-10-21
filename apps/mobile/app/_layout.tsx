@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Slot, usePathname, useRouter } from 'expo-router';
 import { AppHeader, PhoneShell, theme } from '@edubite/ui';
+import { BrandLogo } from '../components/brand/BrandLogo';
 import { LoginGate } from '../components/auth/LoginGate';
 import { NotificationsPanel } from '../components/NotificationsPanel';
 import { AuthProvider, useAuth } from '../lib/auth/AuthProvider';
@@ -57,6 +58,7 @@ function AppShell() {
         onLoginPress={() => go('/profile')}
         onOpenDrawer={() => setDrawerOpen(true)}
         onOpenNotifications={() => setNotesOpen(true)}
+        logo={<BrandLogo place="bar" />}
       />
       <Slot />
 
@@ -74,7 +76,9 @@ function AppShell() {
       >
         <Pressable style={styles.backdrop} onPress={() => setDrawerOpen(false)}>
           <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.drawerTitle}>Edubite</Text>
+            <View style={styles.logoWrap}>
+              <BrandLogo place="menu" />
+            </View>
             <Text style={styles.drawerSub}>
               {SKIP_LOGIN_FOR_PREVIEW
                 ? 'Preview · login off'
@@ -175,18 +179,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
-  drawerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: theme.colors.text,
-    fontFamily: theme.fonts.heading,
-  },
   drawerSub: {
     marginTop: 4,
     marginBottom: 18,
     fontSize: 12,
     color: theme.colors.textFaint,
     fontFamily: theme.fonts.body,
+  },
+  logoWrap: {
+    marginBottom: 2,
   },
   link: {
     paddingVertical: 12,

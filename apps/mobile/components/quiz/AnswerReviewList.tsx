@@ -4,17 +4,14 @@ import { theme } from '@edubite/ui';
 import type { LearnerQuestion } from '../../lib/content/today-questions';
 
 /**
- * Learner review without answer keys.
- * Shows your picks only — server grading owns correctness / RDM.
+ * Result review matching the website: your pick and the correct option.
  */
 export function AnswerReviewList({
   questions,
   answers,
-  answerCorrect,
 }: {
   questions: LearnerQuestion[];
   answers: Array<number | null | undefined>;
-  answerCorrect?: boolean[];
 }) {
   if (questions.length === 0) {
     return <Text style={styles.empty}>Loading review…</Text>;
@@ -24,13 +21,13 @@ export function AnswerReviewList({
     <View style={styles.wrap}>
       <Text style={styles.heading}>Review Answers</Text>
       <Text style={styles.sub}>
-        Your selections for today. Official scoring is applied on the server.
+        Your selections, with the correct option marked.
       </Text>
       {questions.map((item, idx) => {
         const selectedIdx = answers[idx];
         const hasAnswer = selectedIdx !== undefined && selectedIdx !== null;
-        const graded = Array.isArray(answerCorrect) && idx < answerCorrect.length;
-        const isRight = graded ? Boolean(answerCorrect[idx]) : null;
+        const known = item.correct !== null && item.correct !== undefined;
+        const isRight = known && hasAnswer ? selectedIdx === item.correct : null;
 
         return (
           <View key={item.id || `q-${idx}`} style={styles.card}>
@@ -63,35 +60,33 @@ export function AnswerReviewList({
             <View style={styles.opts}>
               {item.opts.map((opt, oIdx) => {
                 const isUserSelection = selectedIdx === oIdx;
+                const isCorrectOption = known && oIdx === item.correct;
                 return (
                   <View
                     key={`${item.id}-${oIdx}`}
-                    style={[styles.opt, isUserSelection && styles.optPicked]}
+                    style={[
+                      styles.opt,
+                      isCorrectOption && styles.optRight,
+                      isUserSelection && !isCorrectOption && styles.optWrong,
+                    ]}
                   >
                     <View style={styles.optLeft}>
                       <Text style={styles.optNum}>{oIdx + 1}.</Text>
                       <Text
-                        style={[styles.optText, isUserSelection && styles.optTextPicked]}
+                        style={[
+                          styles.optText,
+                          isCorrectOption && styles.optTextRight,
+                          isUserSelection && !isCorrectOption && styles.optTextWrong,
+                        ]}
                       >
                         {opt}
                       </Text>
                     </View>
-                    {isUserSelection ? (
-                      <Text
-                        style={
-                          isRight === false
-                            ? styles.markWrong
-                            : isRight === true
-                              ? styles.markRight
-                              : styles.markPicked
-                        }
-                      >
-                        {isRight === false
-                          ? 'Your pick'
-                          : isRight === true
-                            ? 'Correct'
-                            : 'Your Pick'}
-                      </Text>
+                    {isCorrectOption ? (
+                      <Text style={styles.markRight}>Correct</Text>
+                    ) : null}
+                    {isUserSelection && !isCorrectOption ? (
+                      <Text style={styles.markWrong}>Your pick</Text>
                     ) : null}
                   </View>
                 );
@@ -216,6 +211,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(55,138,221,0.35)',
     backgroundColor: theme.colors.blueSoft,
   },
+  optRight: {
+    borderColor: 'rgba(29,158,117,0.45)',
+    backgroundColor: theme.colors.tealSoft,
+  },
+  optWrong: {
+    borderColor: 'rgba(220, 80, 100, 0.45)',
+    backgroundColor: 'rgba(220, 80, 100, 0.1)',
+  },
   optLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, flex: 1 },
   optNum: {
     fontSize: 10,
@@ -231,10 +234,24 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.body,
   },
   optTextPicked: { color: theme.colors.blue, fontWeight: '700' },
+  optTextRight: { color: theme.colors.teal, fontWeight: '700' },
+  optTextWrong: { color: theme.colors.pink, fontWeight: '700' },
   markPicked: {
     fontSize: 10,
     fontWeight: '800',
     color: theme.colors.blue,
+    fontFamily: theme.fonts.body,
+  },
+  markRight: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: theme.colors.teal,
+    fontFamily: theme.fonts.body,
+  },
+  markWrong: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: theme.colors.pink,
     fontFamily: theme.fonts.body,
   },
 });

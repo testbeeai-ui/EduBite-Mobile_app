@@ -1,7 +1,8 @@
 /**
  * Single learner content pipeline for DailyDose / FunBrain.
  * Anon key is public — anything selected here is world-readable.
- * Do not add `correct` (or other answer keys) to these DTOs.
+ * Do not add other secrets. `correct` is included so the result screen can
+ * mark the right option, matching the website.
  */
 import { scheduleDateInCycle, todayKey } from '../game/date';
 import {
@@ -15,6 +16,8 @@ export type LearnerQuestion = {
   tag: string;
   text: string;
   opts: string[];
+  /** Option index of the correct answer, same as the website. */
+  correct: number | null;
 };
 
 function normalizeOpts(raw: unknown): string[] {
@@ -48,11 +51,14 @@ export function mapContentRows(
       const text = opts?.stripFunBrainLabel
         ? stripFunBrainBankLabel(row.q || '')
         : (row.q || '').trim();
+      const parsed = Number(row.correct);
+      const correct = Number.isInteger(parsed) ? parsed : null;
       return {
         id: String(row.id),
         tag: (row.tag || '').trim(),
         text,
         opts: normalizeOpts(row.opts),
+        correct,
       };
     })
     .filter((q) => q.text.length > 0 && q.opts.length >= 2);

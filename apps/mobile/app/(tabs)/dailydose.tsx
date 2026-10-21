@@ -201,16 +201,14 @@ export default function DailyDoseScreen() {
     questionCount: questions.length || answeredCount,
     saving,
   });
-  const displayCorrect =
-    result.status === 'graded'
-      ? result.correct
-      : classLevel === '12'
-        ? state.dose.correct12
-        : state.dose.correct11;
   const displayTotal = result.total || questions.length || answeredCount;
-  const earnedRdm =
-    result.status === 'graded' ? displayCorrect * dosePerCorrect : 0;
-  const answerCorrect = state.dose.answerCorrect;
+  const localCorrect = questions.reduce((count, question, index) => {
+    if (question.correct == null) return count;
+    return displayAnswers[index] === question.correct ? count + 1 : count;
+  }, 0);
+  const canGradeLocally = questions.some((question) => question.correct != null);
+  const shownCorrect = result.status === 'graded' ? result.correct : localCorrect;
+  const earnedRdm = shownCorrect * dosePerCorrect;
 
   const currentQ = questions[idx];
 
@@ -330,15 +328,17 @@ export default function DailyDoseScreen() {
           <View style={styles.completeCard}>
             <View style={styles.completeWrap}>
               <Text style={styles.earnedBig}>
-                {result.status === 'graded'
-                  ? `${earnedRdm} RDM earned today`
+                {canGradeLocally || result.status === 'graded'
+                  ? `${earnedRdm} RDM · ${shownCorrect} of ${displayTotal || questions.length || 5} correct`
                   : result.status === 'unsigned'
                     ? 'Sign in to see your score'
                     : 'Scoring your exam…'}
               </Text>
               <Text style={styles.completeSub}>
-                {result.status === 'graded'
-                  ? `${displayCorrect} of ${displayTotal || questions.length || 5} correct today. Finish Fun Brain, Puzzles, Habits, and Pledge too to count today toward your streak.`
+                {canGradeLocally || result.status === 'graded'
+                  ? result.status === 'graded'
+                    ? 'Saved to your account. Finish Fun Brain, Puzzles, Habits, and Pledge too to count today toward your streak.'
+                    : 'This score is on this phone. Sign in with Google to save it to your account.'
                   : result.status === 'unsigned'
                     ? 'Google login is required to save and score this exam.'
                     : `${answeredCount} of ${displayTotal || questions.length || 5} answered · saving your result.`}
@@ -359,7 +359,6 @@ export default function DailyDoseScreen() {
           <AnswerReviewList
             questions={questions}
             answers={displayAnswers}
-            answerCorrect={result.status === 'graded' ? answerCorrect : undefined}
           />
         </>
       ) : !running ? (

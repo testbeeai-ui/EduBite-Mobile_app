@@ -98,14 +98,15 @@ export interface UserProfile {
 
 /**
  * Learner-facing quiz row.
- * Trust boundary: EXPO_PUBLIC anon key is world-readable. Never SELECT secrets
- * (answer keys) into the client — server RPCs grade submissions.
+ * Trust boundary: the published quiz bank includes the correct option index
+ * so the result screen can match the website review. Server RPCs still own RDM.
  */
 export interface ContentQuestion {
   id: string;
   domain: 'dailydose' | 'funbrain' | string;
   q: string;
   opts: string[];
+  correct?: number;
   tag?: string;
   active_date?: string;
   class_level?: string;
@@ -179,7 +180,7 @@ export interface PuzzleProgress {
 
 /** Learner select — answer key column intentionally omitted. */
 const CONTENT_QUESTION_PUBLIC_COLUMNS =
-  'id, domain, q, opts, tag, active_date, class_level, sort_order, published';
+  'id, domain, q, opts, correct, tag, active_date, class_level, sort_order, published';
 
 async function requireSessionUserId(explicitUserId?: string): Promise<string | null> {
   const {
