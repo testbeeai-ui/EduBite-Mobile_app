@@ -38,8 +38,10 @@ export const AppHeader = ({
             <Text style={styles.hbtnText}>☰</Text>
           </TouchableOpacity>
           {logo ?? (
-            <Text style={styles.wordmark}>
-              Edu<Text style={styles.wordmarkHighlight}>bite</Text>
+            <Text style={styles.wordmark} numberOfLines={1}>
+              <Text style={styles.wordmarkEdu}>edu</Text>
+              <Text style={styles.wordmarkBite}>B</Text>
+              <Text style={styles.wordmarkEdu}>ite</Text>
             </Text>
           )}
         </View>
@@ -148,11 +150,15 @@ const styles = StyleSheet.create({
   wordmark: {
     fontFamily: theme.fonts.heading,
     fontWeight: '800',
-    fontSize: 16,
-    color: theme.colors.text,
+    fontSize: 18,
+    letterSpacing: -0.4,
+    flexShrink: 1,
   },
-  wordmarkHighlight: {
-    color: theme.colors.teal,
+  wordmarkEdu: {
+    color: '#F3F4F6',
+  },
+  wordmarkBite: {
+    color: '#2DE2F0',
   },
   right: {
     flexDirection: 'row',

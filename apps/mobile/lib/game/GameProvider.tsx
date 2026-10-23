@@ -77,6 +77,8 @@ type GameContextValue = {
   markChallengePuzzleSubmitted: (monthKey: string) => void;
   /** Quiet roster/submission pull — no full-screen loading flash. */
   syncChallengeRemote: () => Promise<void>;
+  /** Write the RDM balance returned by a server reward RPC. */
+  applyServerRdm: (rdm: number) => void;
   markNotificationRead: (id: string) => void;
   clearNotification: (id: string) => void;
 };
@@ -203,6 +205,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  const applyServerRdm = useCallback((rdm: number) => {
+    if (!Number.isFinite(rdm)) return;
+    const nextRdm = Math.max(0, Math.floor(rdm));
+    setState((prev) => withDerived({ ...prev, rdm: nextRdm }));
+  }, []);
 
   const syncChallengeRemote = useCallback(async () => {
     if (!user?.id) return;
@@ -527,6 +535,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       submitMonthlyChallenge,
       markChallengePuzzleSubmitted,
       syncChallengeRemote,
+      applyServerRdm,
       markNotificationRead,
       clearNotification,
     }),
@@ -550,6 +559,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       submitMonthlyChallenge,
       markChallengePuzzleSubmitted,
       syncChallengeRemote,
+      applyServerRdm,
       markNotificationRead,
       clearNotification,
     ],

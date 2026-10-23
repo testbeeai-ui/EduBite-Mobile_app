@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +16,9 @@ import { useAuth } from '../../lib/auth/AuthProvider';
  * Full-screen gate — same idea as Edubite/Edublast web: sign in before using the app.
  * No guest / anonymous path.
  */
+const PRIVACY_URL = 'https://edubite1.vercel.app/privacy';
+const TERMS_URL = 'https://edubite1.vercel.app/terms';
+
 export function LoginGate() {
   const {
     loading,
@@ -58,6 +62,18 @@ export function LoginGate() {
             <Text style={styles.errorHint}>Tap to dismiss</Text>
           </TouchableOpacity>
         ) : null}
+
+        <Text style={styles.legal}>
+          By continuing, you agree to the{' '}
+          <Text style={styles.legalLink} onPress={() => void Linking.openURL(PRIVACY_URL)}>
+            Privacy notice
+          </Text>
+          {' '}and{' '}
+          <Text style={styles.legalLink} onPress={() => void Linking.openURL(TERMS_URL)}>
+            Terms of use
+          </Text>
+          .
+        </Text>
 
         {loading ? (
           <ActivityIndicator color={theme.colors.purple} style={{ marginTop: 20 }} />
@@ -108,6 +124,18 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: theme.colors.textDim,
     fontFamily: theme.fonts.body,
+  },
+  legal: {
+    marginTop: 14,
+    fontSize: 12,
+    lineHeight: 18,
+    color: theme.colors.textDim,
+    fontFamily: theme.fonts.body,
+  },
+  legalLink: {
+    color: theme.colors.teal,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   errorBox: {
     marginTop: 14,

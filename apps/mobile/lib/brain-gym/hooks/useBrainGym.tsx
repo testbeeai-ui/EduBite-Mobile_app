@@ -27,6 +27,7 @@ import type {
 } from '../types';
 import { ensureSilentSession } from '../silent-auth';
 import { fetchEdubiteRewards } from '../../supabase';
+import { useGame } from '../../game/GameProvider';
 
 interface BrainGymContextValue {
   progress: BrainGymProgress;
@@ -57,6 +58,7 @@ interface BrainGymContextValue {
 const BrainGymContext = createContext<BrainGymContextValue | null>(null);
 
 export function BrainGymProvider({ children }: { children: ReactNode }) {
+  const { applyServerRdm } = useGame();
   const [userId, setUserId] = useState<string | null>(null);
   const [progress, setProgress] = useState<BrainGymProgress | null>(null);
   const [activeGameId, setActiveGameId] = useState<GameId | null>(null);
@@ -159,11 +161,14 @@ export function BrainGymProvider({ children }: { children: ReactNode }) {
             rdmGain: Math.max(0, save.awarded),
             newBadges,
           });
+          if (typeof save.gameRdm === 'number') {
+            applyServerRdm(save.gameRdm);
+          }
         }
       });
       return { rdmGain, newBadges };
     },
-    [progress, activeGameId, isDailyRun, userId],
+    [progress, activeGameId, isDailyRun, userId, applyServerRdm],
   );
 
   const toggleSoundFn = useCallback(() => {

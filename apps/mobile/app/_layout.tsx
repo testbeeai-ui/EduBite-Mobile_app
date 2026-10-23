@@ -58,7 +58,6 @@ function AppShell() {
         onLoginPress={() => go('/profile')}
         onOpenDrawer={() => setDrawerOpen(true)}
         onOpenNotifications={() => setNotesOpen(true)}
-        logo={<BrandLogo place="bar" />}
       />
       <Slot />
 
